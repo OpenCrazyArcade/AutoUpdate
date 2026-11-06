@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-07
 - Bản thử để kiểm tra nâng cấp từ 1.1.0: không đổi chức năng.
 
 ## [1.1.0] - 2026-11-07
