@@ -48,6 +48,19 @@ The launcher:
 `minLauncher` and `schema` let a newer release add names without breaking older launchers: an older launcher refuses a
 name it does not know ("Tệp không được phép cài").
 
+### Start-up sync (from 1.1.4)
+
+A launcher of version X brings the client files to those of release vX each time it starts, when the version differs from
+the last sync (`launcher.json` -> `ComponentsSyncedFor`) or a file is missing: it downloads `attachments.json` of the tag
+`vX`, compares each SHA-256 with what is installed and installs the ones that differ (same checks as an install from the
+page). So copying only `AutoUpdate.exe` into the game folder is enough.
+
+* It never looks for another launcher version; installing any version, older ones included, stays the page's job.
+* The download address is built from a fixed repository and the launcher's own tag; `attachments.json` gives only names
+  and hashes, so it cannot point the launcher elsewhere. Unknown names and `AutoUpdate.exe` are ignored.
+* A release without `attachments.json` (1.0.x) has nothing to sync. Offline, a bad hash or a locked file is reported in
+  the status line, the files stay as they are, and the next start tries again. It does not run while the game runs.
+
 ## 2. Server resources (server -> launcher -> CAPlay)
 
 `GET {server}/api/updates/resources`:

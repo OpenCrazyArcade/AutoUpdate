@@ -47,6 +47,10 @@ public class LauncherConfig
     public bool AutoCheckUpdateAtStartup { get; set; } = true;
     public bool WindowedMode { get; set; } = true;
 
+    /// <summary>Launcher version (X.Y.Z) whose client files were last synced into the game folder (ComponentSync).
+    /// A different version means the files are looked at again at the next start.</summary>
+    public string ComponentsSyncedFor { get; set; }
+
     // Legacy fields for backward compatibility
     public string ServerHost { get; set; }
     public int ServerHttpPort { get; set; }

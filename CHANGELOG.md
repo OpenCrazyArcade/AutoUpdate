@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+- Mở launcher thì tự đưa các tệp client (`nmco3.dll`, `ehsvc.dll`, `hsupdate.exe`, `CAPlay.dll`, `ddraw.dll`) về đúng bản của launcher (theo `attachments.json` của bản đó, so SHA-256): chỉ cần chép `AutoUpdate.exe` vào thư mục game. Launcher vẫn không tự dò bản launcher mới; đổi/hạ phiên bản launcher vẫn qua trang dự án.
+
+
 ## [1.1.3] - 2026-11-07
 - Bản thử: `ddraw.dll` trở lại bản phát hành.
 

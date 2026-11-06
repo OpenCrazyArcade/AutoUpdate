@@ -139,12 +139,71 @@ internal partial class LauncherWindow : Window
         // From here on links and "show yourself" requests from other instances can be served.
         _remote.Attach(line => Dispatcher.BeginInvoke(() => OnRemoteLine(line)));
 
+        await SyncComponentsAsync();
+
         if (_config.AutoCheckUpdateAtStartup)
         {
             await CheckUpdatesAsync();
         }
 
         StartUpdateWatching();
+    }
+
+    // ── Tep client theo dung ban cua launcher ─────────────────────────────────────────────────────
+    // A launcher of version X brings the client files (nmco3.dll, ehsvc.dll, ...) to those of release vX when it
+    // starts: so copying only AutoUpdate.exe into the game folder is enough. It never looks for another launcher
+    // version (that stays the project page's job, which is what lets you go back to an older one).
+    private bool _componentSyncRunning;
+
+    private async Task SyncComponentsAsync()
+    {
+        string ca = FindGameExecutable();
+        if (ca == null || IsGameRunning()) return;     // no game folder to fill / files are in use
+
+        string gameDir = Path.GetDirectoryName(ca)!;
+        string version = SelfUpdater.CurrentVersionText;
+        if (!ComponentSync.NeedsSync(_config.ComponentsSyncedFor, version, gameDir)) return;
+
+        _componentSyncRunning = true;
+        BtnStart.IsEnabled = false;
+        try
+        {
+            TxtStatus.Text = "Đang kiểm tra các tệp client của dự án...";
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("OpenCrazyArcade-AutoUpdate/" + version);
+            var result = await ComponentSync.SyncAsync(_logger, http, ComponentSync.ReleaseBase, version, gameDir,
+                msg => Dispatcher.BeginInvoke(() => TxtStatus.Text = msg));
+
+            switch (result.Outcome)
+            {
+                case ComponentSync.Outcome.Synced:
+                    _logger.LogInformation("[COMPONENTS] da dong bo {Count} tep theo ban v{Version}", result.Installed, version);
+                    TxtStatus.Text = $"Đã cập nhật {result.Installed} tệp client theo bản v{version}.";
+                    _config.ComponentsSyncedFor = version; _config.Save();
+                    break;
+                case ComponentSync.Outcome.UpToDate:
+                case ComponentSync.Outcome.NoAttachments:
+                    _config.ComponentsSyncedFor = version; _config.Save();
+                    TxtStatus.Text = "Sẵn sàng.";
+                    break;
+                default:
+                    // Offline or a bad file: say so, keep what is there, try again at the next start.
+                    _logger.LogWarning("[COMPONENTS] {Outcome}: {Message}", result.Outcome, result.Message);
+                    TxtStatus.Text = "Chưa đồng bộ được tệp client: " + (result.Message ?? result.Outcome.ToString()).Split('\n')[0];
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[COMPONENTS] dong bo that bai");
+            TxtStatus.Text = "Chưa đồng bộ được tệp client: " + ex.Message;
+        }
+        finally
+        {
+            _componentSyncRunning = false;
+            // CheckUpdatesAsync (next) decides the final state of the button; when it will not run, restore it here.
+            if (!_config.AutoCheckUpdateAtStartup || !_config.HasServer) BtnStart.IsEnabled = _config.HasServer && !IsGameRunning();
+        }
     }
 
     // ── Launcher tu cap nhat + yeu cau tu instance khac (link opencrazyarcade://) ─────────────
@@ -1209,6 +1268,7 @@ savesettings=1
 
     private async void BtnStart_Click(object sender, RoutedEventArgs e)
     {
+        if (_componentSyncRunning) { TxtStatus.Text = "Đang đồng bộ tệp client, hãy đợi một chút."; return; }
         if (IsGameRunning())
         {
             // Kill game process
