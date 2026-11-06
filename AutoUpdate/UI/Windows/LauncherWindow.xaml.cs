@@ -81,6 +81,9 @@ internal partial class LauncherWindow : Window
     private static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
 
     [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetExitCodeThread(IntPtr hThread, out uint lpExitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
     private static extern uint ResumeThread(IntPtr hThread);
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -154,6 +157,7 @@ internal partial class LauncherWindow : Window
     // starts: so copying only AutoUpdate.exe into the game folder is enough. It never looks for another launcher
     // version (that stays the project page's job, which is what lets you go back to an older one).
     private bool _componentSyncRunning;
+    private bool _caPlayLoadFailed;
     private bool _checkUpdatesRunning;
 
     /// <summary>True while the launcher is writing files into the game folder (client files at start-up, or the server's
@@ -1430,6 +1434,7 @@ savesettings=1
                     out pi);
 
                 bool injected = false;
+                _caPlayLoadFailed = false;
                 if (created && pi.hProcess != IntPtr.Zero)
                 {
                     try
@@ -1445,10 +1450,24 @@ savesettings=1
                             IntPtr hThread = CreateRemoteThread(pi.hProcess, IntPtr.Zero, 0, pLoadLibraryA, allocAddr, 0, out _);
                             if (hThread != IntPtr.Zero)
                             {
-                                WaitForSingleObject(hThread, 5000);
+                                // The thread runs LoadLibraryA, whose result (the module handle, 0 on failure) is the thread's exit
+                                // code. Creating the thread says nothing about whether the dll loaded: a dll whose runtime is missing
+                                // (Microsoft Visual C++ Redistributable x86) fails here and the game would otherwise start without it.
+                                uint wait = WaitForSingleObject(hThread, 5000);
+                                uint loaded = 0;
+                                bool haveResult = wait == 0 && GetExitCodeThread(hThread, out loaded);
                                 CloseHandle(hThread);
-                                injected = true;
-                                _logger.LogInformation("CAPlay.dll da inject thanh cong vao CA.exe (PID: {Pid})", pi.dwProcessId);
+                                if (haveResult && loaded == 0)
+                                {
+                                    _logger.LogError("CAPlay.dll KHONG nap duoc vao CA.exe (LoadLibrary tra ve 0). Thuong la thieu " +
+                                                     "Microsoft Visual C++ Redistributable 2015-2022 (x86), hoac tep bi chan/hong");
+                                    _caPlayLoadFailed = true;
+                                }
+                                else
+                                {
+                                    injected = true;
+                                    _logger.LogInformation("CAPlay.dll da nap vao CA.exe (PID: {Pid}, module 0x{Module:X})", pi.dwProcessId, loaded);
+                                }
                             }
                         }
                     }
@@ -1474,7 +1493,9 @@ savesettings=1
                     if (!injected)
                     {
                         _logger.LogError("Inject CAPlay.dll that bai - da dung ca.exe (PID {Pid})", pi.dwProcessId);
-                        TxtStatus.Text = "Không nạp được CAPlay.dll vào game — xem nhật ký launcher!";
+                        TxtStatus.Text = _caPlayLoadFailed
+                            ? "Không nạp được CAPlay.dll: thiếu Microsoft Visual C++ Redistributable 2015-2022 (x86)? Hãy cài rồi thử lại."
+                            : "Không nạp được CAPlay.dll vào game — xem nhật ký launcher!";
                         return;
                     }
                     _gameProcess = Process.GetProcessById(pi.dwProcessId);

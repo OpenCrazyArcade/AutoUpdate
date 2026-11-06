@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Launcher kiểm kết quả nạp `CAPlay.dll` vào game (trước đó chỉ cần tạo được luồng nạp là ghi "thành công"). Nếu `LoadLibrary` thất bại (thường do thiếu Microsoft Visual C++ Redistributable 2015-2022 x86), game không được chạy và dòng trạng thái nói rõ nguyên nhân, thay vì chạy mà không có CAPlay (không có log, không nạp gói `from-oca`).
+
+
 ## [1.4.1] - 2026-11-07
 ### Fixed
 - Trong lúc launcher đang ghi tệp vào thư mục game (đồng bộ tệp client lúc mở, hoặc cập nhật từ máy chủ), tab Trang dự án bị khoá nút cài và nói "đang cập nhật tệp game"; yêu cầu cài đến lúc đó cũng bị launcher từ chối. Trước đây vẫn bấm được và hộp xác nhận cài chồng lên.
