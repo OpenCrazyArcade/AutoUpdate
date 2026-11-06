@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [1.0.2] - 2026-11-06
 - Không đổi chức năng: bản vá để thử workflow chỉ chạy khi có tag.
 
 ## [1.0.1] - 2026-11-06
