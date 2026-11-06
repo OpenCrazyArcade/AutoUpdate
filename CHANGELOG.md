@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bản thử: không kèm `ddraw.dll`.
+
 ## [1.3.0] - 2026-11-07
 - Bản thử 1.3.x để kiểm tra giao diện cập nhật: bản đầy đủ, không đổi chức năng.
 
