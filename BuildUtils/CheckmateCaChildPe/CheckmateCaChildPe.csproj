@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Build step for HSUpdate. CA.exe starts hsupdate.exe as a child process and inspects its PE image before it
+	     trusts the result (HS_Updater_LaunchHSUpdate: sub_ABCBF0 walks the import table with a raw-offset assumption,
+	     sub_ABCF00 wants a certificate table). A Native AOT exe fails both checks as linked; this fixes the image.
+	     Runs on the build machine only (AnyCPU, not shipped). See README.md. -->
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>OpenCrazyArcade.BuildUtils</RootNamespace>
+		<InvariantGlobalization>true</InvariantGlobalization>
+	</PropertyGroup>
+
+</Project>

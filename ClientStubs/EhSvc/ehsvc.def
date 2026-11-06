@@ -1,0 +1,6 @@
+; CA.exe finds the export with sub_AAB978(hModule, 10): it walks the export NAME table and compares the ORDINAL
+; (AddressOfNameOrdinals[i] + Base) with 10, so the function needs a name AND ordinal 10.
+; "10 @10" gives both, as in the real EhSvc.dll. Without this file the ordinal would be 1 and the game would not find it.
+LIBRARY EhSvc
+EXPORTS
+    10 @10

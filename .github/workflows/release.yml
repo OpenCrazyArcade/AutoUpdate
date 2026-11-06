@@ -58,12 +58,45 @@ jobs:
       - name: Publish nmco3.dll
         run: dotnet publish NMCO3/NMCO3.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/nmco3
 
+      # The HackShield stand-ins. HSUpdate runs CheckmateCaChildPe after publish and fails the build if CA.exe's checks
+      # on the updater image would still fail.
+      - name: Test the PE tool
+        run: dotnet test BuildUtils/CheckmateCaChildPe.Tests -c Release
+
+      - name: Publish ehsvc.dll
+        run: dotnet publish ClientStubs/EhSvc/EhSvc.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/ehsvc
+
+      - name: Publish hsupdate.exe
+        run: dotnet publish ClientStubs/HSUpdate/HSUpdate.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/hsupdate
+
       - name: Collect the files and check the version
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist | Out-Null
           Copy-Item out/autoupdate/autoupdate.exe dist/AutoUpdate.exe
           Copy-Item out/nmco3/nmco3.dll dist/nmco3.dll
+          Copy-Item out/ehsvc/EhSvc.dll dist/ehsvc.dll
+          Copy-Item out/hsupdate/HSUpdate.exe dist/hsupdate.exe
+
+          # CA.exe finds ehsvc.dll's one function by ORDINAL 10 (sub_AAB978 walks the name table comparing
+          # ordinal = index + Base): so Base must be 10 with exactly one named export. See ClientStubs/EhSvc/ehsvc.def.
+          $b = [IO.File]::ReadAllBytes("$PWD/dist/ehsvc.dll")
+          $nt = [BitConverter]::ToInt32($b, 0x3C); $opt = $nt + 24
+          $secs = [BitConverter]::ToUInt16($b, $nt + 6); $tbl = $opt + [BitConverter]::ToUInt16($b, $nt + 20)
+          $expRva = [BitConverter]::ToUInt32($b, $opt + 96)
+          $exp = -1
+          for ($i = 0; $i -lt $secs; $i++) {
+            $a = $tbl + 40 * $i
+            $va = [BitConverter]::ToUInt32($b, $a + 12); $vs = [BitConverter]::ToUInt32($b, $a + 8); $raw = [BitConverter]::ToUInt32($b, $a + 20)
+            if ($expRva -ge $va -and $expRva -lt $va + $vs) { $exp = $expRva - $va + $raw }
+          }
+          if ($exp -lt 0) { throw 'ehsvc.dll has no export table' }
+          $base = [BitConverter]::ToUInt32($b, $exp + 16); $names = [BitConverter]::ToUInt32($b, $exp + 24)
+          if ($base -ne 10 -or $names -ne 1) { throw "ehsvc.dll export table: Base=$base, names=$names (want Base 10, 1 name)" }
+
+          # hsupdate.exe: re-check the image CA.exe inspects (the build step already did; this guards the copy)
+          dotnet run --project BuildUtils/CheckmateCaChildPe -c Release -- --check dist/hsupdate.exe
+          if ($LASTEXITCODE -ne 0) { throw 'hsupdate.exe would be rejected by CA.exe' }
 
           # The launcher compares this number with the release tag: it must be the tag.
           $want = '${{ steps.ver.outputs.version }}.0'
@@ -112,5 +145,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create '${{ github.ref_name }}' dist/AutoUpdate.exe dist/nmco3.dll dist/SHA256SUMS.txt `
+          gh release create '${{ github.ref_name }}' dist/AutoUpdate.exe dist/nmco3.dll dist/ehsvc.dll dist/hsupdate.exe dist/SHA256SUMS.txt `
             --title 'AutoUpdate ${{ github.ref_name }}' --notes-file release-notes.md

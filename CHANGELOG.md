@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+
+### Added
+- `ehsvc.dll` và `hsupdate.exe` tự dựng bằng .NET Native AOT (`ClientStubs/`), thay cho hai tệp HackShield; `CheckmateCaChildPe` chỉnh PE của `hsupdate.exe` sau publish. Workflow build, kiểm (ordinal 10, phép kiểm của `CA.exe`) và đính kèm cả hai vào bản phát hành.
 - Trang dự án cài được cả `nmco3.dll` cùng launcher (hoặc riêng), mỗi tệp kiểm SHA-256 trước khi cài.
 
 ## [1.0.2] - 2026-11-06

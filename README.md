@@ -5,13 +5,16 @@ Launcher cho game Boom Online (Crazy Arcade) bản VN v116, dùng với các má
 [Releases](https://github.com/OpenCrazyArcade/AutoUpdate/releases); hướng dẫn cài game ở
 [trang dự án](https://opencrazyarcade.github.io/huong-dan/).
 
-Repo gồm ba dự án (`AutoUpdate.slnx`):
+Repo gồm các dự án sau (`AutoUpdate.slnx`):
 
 | Dự án | Là gì |
 |---|---|
 | `AutoUpdate/` | Launcher WPF (.NET 10, x86, một file). Chọn máy chủ, cập nhật game, chạy `CA.exe`, giữ cầu nối NMCO. |
 | `NMCO3/` | `nmco3.dll` thay cho thư viện messenger của Nexon (Native AOT, x86). Xem `NMCO3/README.md`. |
 | `Ipc/` | Kiểu dữ liệu giao thức named pipe dùng chung giữa launcher và `nmco3.dll`. |
+| `ClientStubs/EhSvc` | `ehsvc.dll` thay cho thư viện HackShield (Native AOT, x86): `CA.exe` tìm hàm của nó theo **ordinal 10**. |
+| `ClientStubs/HSUpdate` | `hsupdate.exe` thay cho bộ cập nhật HackShield (Native AOT, x86); sau publish được chỉnh PE cho đúng phép kiểm của `CA.exe`. |
+| `BuildUtils/CheckmateCaChildPe` | Công cụ build chạy sau publish `HSUpdate` (xem README trong thư mục), kèm `.Tests`. |
 
 ## Cách hoạt động
 
