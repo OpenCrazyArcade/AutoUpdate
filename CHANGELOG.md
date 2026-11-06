@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-11-07
 ### Fixed
 - Khi cài từ tab Trang dự án (đang tải/ghi tệp), nút "Bắt đầu" hiện "Đang Cập Nhật..." và bị tắt, như khi đồng bộ lúc mở.
 
