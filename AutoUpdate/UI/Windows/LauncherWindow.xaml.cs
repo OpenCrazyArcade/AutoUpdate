@@ -1102,12 +1102,9 @@ savesettings=1
     {
         string dir = Path.GetDirectoryName(Environment.ProcessPath);
         if (string.IsNullOrEmpty(dir)) return null;
-        foreach (string name in new[] { "ca.exe", "CA.exe" })
-        {
-            string candidate = Path.Combine(dir, name);
-            if (File.Exists(candidate)) return candidate;
-        }
-        return null;
+        // File names are case-insensitive on Windows: "ca.exe" also matches CA.exe and CA.EXE.
+        string candidate = Path.Combine(dir, "ca.exe");
+        return File.Exists(candidate) ? candidate : null;
     }
 
     private const string MissingGameText = "Không thấy ca.exe cạnh launcher. Hãy chép AutoUpdate.exe vào thư mục game (nơi có ca.exe) rồi chạy lại.";
