@@ -399,7 +399,7 @@ internal partial class LauncherWindow : Window
         ChkConfigWindowedMode.IsChecked = _config.WindowedMode;
         _config.Save();
 
-        string caExe = FindGameExecutable(promptIfMissing: false);
+        string caExe = FindGameExecutable();
         if (!string.IsNullOrEmpty(caExe))
         {
             ApplyWindowedModeSetting(Path.GetDirectoryName(caExe)!, _config.WindowedMode);
@@ -776,7 +776,7 @@ savesettings=1
 
     private string CaPlayPath()
     {
-        string caExe = FindGameExecutable(promptIfMissing: false);
+        string caExe = FindGameExecutable();
         return string.IsNullOrEmpty(caExe) ? null : Path.Combine(Path.GetDirectoryName(caExe)!, "CAPlay.dll");
     }
 
@@ -857,7 +857,7 @@ savesettings=1
         ChkWindowedMode.IsChecked = _config.WindowedMode;
         _config.Save();
 
-        string caExe = FindGameExecutable(promptIfMissing: false);
+        string caExe = FindGameExecutable();
         if (!string.IsNullOrEmpty(caExe))
         {
             ApplyWindowedModeSetting(Path.GetDirectoryName(caExe)!, _config.WindowedMode);
@@ -889,6 +889,13 @@ savesettings=1
             return;
         }
 
+        // Updates are written next to ca.exe: without it there is no game folder, so do not download anywhere.
+        if (FindGameExecutable() == null)
+        {
+            TxtStatus.Text = MissingGameText;
+            return;
+        }
+
         // Vô hiệu hóa nút Bắt đầu trong suốt quá trình cập nhật
         _lastUpdateFailed = false;
         BtnStart.IsEnabled = false;
@@ -897,13 +904,8 @@ savesettings=1
 
         try
         {
-            string caExe = FindGameExecutable(promptIfMissing: false);
-            string gameDir = !string.IsNullOrEmpty(caExe) ? Path.GetDirectoryName(caExe) : null;
-            if (string.IsNullOrEmpty(gameDir))
-            {
-                string procPath = Environment.ProcessPath;
-                gameDir = !string.IsNullOrEmpty(procPath) ? Path.GetDirectoryName(procPath) : AppDomain.CurrentDomain.BaseDirectory;
-            }
+            string caExe = FindGameExecutable();
+            string gameDir = Path.GetDirectoryName(caExe);
 
             string baseUrl = _config.GetNormalizedServerUrl();
             using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
@@ -1089,167 +1091,34 @@ savesettings=1
         }
     }
 
-    private string FindGameExecutable(bool promptIfMissing = true)
+    private const string GuideUrl = "https://opencrazyarcade.github.io/huong-dan/";
+
+    /// <summary>
+    /// ca.exe next to this launcher, or null. The only supported setup is: install the game from the original
+    /// installer, then copy autoupdate.exe over it, so no other place is searched (a game found elsewhere could be
+    /// someone else's install, and updates would be written into it).
+    /// </summary>
+    private static string FindGameExecutable()
     {
-        // 1. Kiểm tra cấu hình chỉ định sẵn trong launcher.json
-        if (!string.IsNullOrWhiteSpace(_config.GamePath))
+        string dir = Path.GetDirectoryName(Environment.ProcessPath);
+        if (string.IsNullOrEmpty(dir)) return null;
+        foreach (string name in new[] { "ca.exe", "CA.exe" })
         {
-            string custom = _config.GamePath.Trim();
-            if (File.Exists(custom))
-            {
-                return Path.GetFullPath(custom);
-            }
-            if (Directory.Exists(custom))
-            {
-                string[] dirChecks = ["ca.exe", "CA.exe", "CA.EXE", Path.Combine("app", "ca.exe"), Path.Combine("app", "CA.exe")];
-                foreach (var f in dirChecks)
-                {
-                    string candidate = Path.Combine(custom, f);
-                    if (File.Exists(candidate)) return Path.GetFullPath(candidate);
-                }
-            }
+            string candidate = Path.Combine(dir, name);
+            if (File.Exists(candidate)) return candidate;
         }
-
-        // 2. Kiểm tra thư mục thực tế của chính autoupdate.exe (xử lý triệt để Single-File App bundle)
-        string processPath = Environment.ProcessPath;
-        if (!string.IsNullOrEmpty(processPath))
-        {
-            string exeDir = Path.GetDirectoryName(processPath);
-            if (!string.IsNullOrEmpty(exeDir) && Directory.Exists(exeDir))
-            {
-                string[] candidates =
-                [
-                    Path.Combine(exeDir, "ca.exe"),
-                    Path.Combine(exeDir, "CA.exe"),
-                    Path.Combine(exeDir, "CA.EXE"),
-                    Path.Combine(exeDir, "app", "ca.exe"),
-                    Path.Combine(exeDir, "app", "CA.exe")
-                ];
-                foreach (var c in candidates)
-                {
-                    if (File.Exists(c))
-                    {
-                        _logger.LogInformation("Found game executable via Environment.ProcessPath: {Path}", c);
-                        return Path.GetFullPath(c);
-                    }
-                }
-            }
-        }
-
-        // 3. Kiểm tra CurrentDirectory, AppDomain.BaseDirectory, AppContext.BaseDirectory
-        string[] searchDirs =
-        [
-            Directory.GetCurrentDirectory(),
-            AppDomain.CurrentDomain.BaseDirectory,
-            AppContext.BaseDirectory
-        ];
-
-        foreach (var dir in searchDirs)
-        {
-            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
-            string[] candidates =
-            [
-                Path.Combine(dir, "ca.exe"),
-                Path.Combine(dir, "CA.exe"),
-                Path.Combine(dir, "CA.EXE"),
-                Path.Combine(dir, "app", "ca.exe"),
-                Path.Combine(dir, "app", "CA.exe"),
-                Path.Combine(dir, "..", "Debug", "ca.exe"),
-                Path.Combine(dir, "Debug", "ca.exe"),
-                Path.Combine(dir, "..", "..", "..", "..", "Debug", "ca.exe")
-            ];
-            foreach (var c in candidates)
-            {
-                if (File.Exists(c))
-                {
-                    _logger.LogInformation("Found game executable via Directory search: {Path}", c);
-                    return Path.GetFullPath(c);
-                }
-            }
-        }
-
-        // 4. Kiểm tra Registry VNG Boom / Nexon Crazy Arcade
-        string[] regKeys =
-        [
-            @"SOFTWARE\WOW6432Node\VNG\Boom",
-            @"SOFTWARE\VNG\Boom",
-            @"SOFTWARE\WOW6432Node\Nexon\BubbleFighter",
-            @"SOFTWARE\Nexon\BubbleFighter",
-            @"SOFTWARE\WOW6432Node\Nexon\CrazyArcade",
-            @"SOFTWARE\Nexon\CrazyArcade"
-        ];
-
-        foreach (var regSub in regKeys)
-        {
-            try
-            {
-                using var hklm = Microsoft.Win32.RegistryKey.OpenBaseKey(
-                    Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry32);
-                using var key = hklm.OpenSubKey(regSub);
-                if (key != null)
-                {
-                    string pathVal = key.GetValue("Path") as string ?? key.GetValue("InstallPath") as string ?? key.GetValue("ExecPath") as string;
-                    if (!string.IsNullOrEmpty(pathVal))
-                    {
-                        if (File.Exists(pathVal)) return Path.GetFullPath(pathVal);
-                        if (Directory.Exists(pathVal))
-                        {
-                            string ca1 = Path.Combine(pathVal, "ca.exe");
-                            if (File.Exists(ca1)) return Path.GetFullPath(ca1);
-                            string ca2 = Path.Combine(pathVal, "CA.exe");
-                            if (File.Exists(ca2)) return Path.GetFullPath(ca2);
-                        }
-                    }
-                }
-            }
-            catch { }
-        }
-
-        // 5. Kiểm tra các đường dẫn mặc định quen thuộc
-        string[] defaultPaths =
-        [
-            @"C:\Program Files (x86)\VNG\Boom\ca.exe",
-            @"C:\Program Files (x86)\VNG\Boom\CA.exe",
-            @"C:\Program Files\VNG\Boom\ca.exe",
-            @"C:\Program Files\VNG\Boom\CA.exe",
-            @"D:\VNG\Boom\ca.exe",
-            @"D:\VNG\Boom\CA.exe",
-            @"E:\VNG\Boom\ca.exe"
-        ];
-        foreach (var p in defaultPaths)
-        {
-            if (File.Exists(p)) return Path.GetFullPath(p);
-        }
-
-        // 6. Nếu vẫn không thấy và người dùng đang tương tác: hiển thị hộp thoại duyệt tìm file
-        if (promptIfMissing)
-        {
-            var res = MessageBox.Show(
-                "Không tự động tìm thấy file 'ca.exe' trong thư mục hiện tại hoặc Registry.\n\nBạn có muốn duyệt tìm và chọn file 'ca.exe' (hoặc CA.exe) thủ công không?",
-                "Chỉ định vị trí cài đặt game",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (res == MessageBoxResult.Yes)
-            {
-                var dlg = new Microsoft.Win32.OpenFileDialog
-                {
-                    Title = "Chọn file khởi chạy game Crazy Arcade (ca.exe hoặc CA.exe)",
-                    Filter = "Crazy Arcade Executable (ca.exe;CA.exe)|ca.exe;CA.exe;*.exe|Tất cả tệp (*.*)|*.*",
-                    FileName = "ca.exe"
-                };
-
-                if (dlg.ShowDialog() == true && File.Exists(dlg.FileName))
-                {
-                    _config.GamePath = dlg.FileName;
-                    _config.Save();
-                    _logger.LogInformation("User selected game executable: {Path}", dlg.FileName);
-                    return dlg.FileName;
-                }
-            }
-        }
-
         return null;
+    }
+
+    private const string MissingGameText = "Không thấy ca.exe cạnh launcher. Hãy chép AutoUpdate.exe vào thư mục game (nơi có ca.exe) rồi chạy lại.";
+
+    /// <summary>Tells the player where to put the launcher and offers the guide page.</summary>
+    private void ShowMissingGameNotice()
+    {
+        var answer = MessageBox.Show(
+            MissingGameText + "\n\nMở trang hướng dẫn trên opencrazyarcade.github.io?",
+            "Chưa thấy game", MessageBoxButton.YesNo, MessageBoxImage.Information);
+        if (answer == MessageBoxResult.Yes) OpenInDefaultBrowser(GuideUrl);
     }
 
     private static readonly byte[] s_defaultMapGroupVisible = new byte[]
@@ -1353,6 +1222,14 @@ savesettings=1
             return;
         }
 
+        string caExe = FindGameExecutable();
+        if (string.IsNullOrEmpty(caExe))
+        {
+            TxtStatus.Text = MissingGameText;
+            ShowMissingGameNotice();
+            return;
+        }
+
         // The server may have published since the last check (push not delivered yet, or hub down): ask for its
         // version right now and update first if it differs or the last update was incomplete.
         string serverVersion = await FetchUpdateVersionAsync();
@@ -1362,13 +1239,6 @@ savesettings=1
                 serverVersion ?? "(khong hoi duoc)", _knownUpdateVersion ?? "?", _lastUpdateFailed);
             if (serverVersion != null) _knownUpdateVersion = serverVersion;
             await RunUpdateIfIdleAsync();
-        }
-
-        string caExe = FindGameExecutable(promptIfMissing: true);
-        if (string.IsNullOrEmpty(caExe))
-        {
-            TxtStatus.Text = "Chưa cấu hình đường dẫn game Crazy Arcade!";
-            return;
         }
 
         string gameDir = Path.GetDirectoryName(caExe)!;

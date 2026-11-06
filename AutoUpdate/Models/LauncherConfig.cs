@@ -46,7 +46,6 @@ public class LauncherConfig
     public Dictionary<string, string> DevFlags { get; set; } = new();
     public bool AutoCheckUpdateAtStartup { get; set; } = true;
     public bool WindowedMode { get; set; } = true;
-    public string GamePath { get; set; }
 
     // Legacy fields for backward compatibility
     public string ServerHost { get; set; }

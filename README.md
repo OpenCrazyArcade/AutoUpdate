@@ -15,6 +15,7 @@ Repo gồm ba dự án (`AutoUpdate.slnx`):
 
 ## Cách hoạt động
 
+- **Vị trí**: chép `AutoUpdate.exe` vào thư mục game, cạnh `ca.exe` (cài game từ bộ cài gốc rồi chép đè). Launcher chỉ tìm `ca.exe` ở đó; không thấy thì không cập nhật, không chạy game, và nhắc kèm link trang hướng dẫn.
 - **Máy chủ**: không có máy chủ mặc định. Chủ máy chủ đưa liên kết `opencrazyarcade://set-server/?src=https://...`;
   bấm vào đó, launcher hỏi lại rồi lưu địa chỉ. Cũng nhập tay được trong cửa sổ cấu hình.
 - **Một bản duy nhất**: chạy lần hai chỉ chuyển lệnh sang bản đang chạy (mutex + named pipe).
