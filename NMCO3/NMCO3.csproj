@@ -13,6 +13,10 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <AssemblyName>nmco3</AssemblyName>
     <StripSymbols>true</StripSymbols>
+    <!-- The launcher tells this dll from Nexon's original by the version resource: do not change Product. -->
+    <Product>OpenCrazyArcade NMCO3</Product>
+    <Company>OpenCrazyArcade</Company>
+    <Description>OpenCrazyArcade replacement for Nexon nmco3.dll</Description>
   </PropertyGroup>
 
   <ItemGroup>

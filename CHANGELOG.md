@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Trang dự án cài được cả `nmco3.dll` cùng launcher (hoặc riêng), mỗi tệp kiểm SHA-256 trước khi cài.
 
 ## [1.0.2] - 2026-11-06
 - Không đổi chức năng: bản vá để thử workflow chỉ chạy khi có tag.

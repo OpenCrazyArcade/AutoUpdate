@@ -19,8 +19,12 @@ Repo gồm ba dự án (`AutoUpdate.slnx`):
 - **Máy chủ**: không có máy chủ mặc định. Chủ máy chủ đưa liên kết `opencrazyarcade://set-server/?src=https://...`;
   bấm vào đó, launcher hỏi lại rồi lưu địa chỉ. Cũng nhập tay được trong cửa sổ cấu hình.
 - **Một bản duy nhất**: chạy lần hai chỉ chuyển lệnh sang bản đang chạy (mutex + named pipe).
-- **Tự cập nhật**: launcher không tự dò bản mới. Tab "Trang dự án" liệt kê các bản trên GitHub Releases; bấm cài
-  thì launcher hiện địa chỉ tải để xác nhận, tải về, kiểm SHA-256 rồi đổi tên file để thay chính nó.
+- **Tự cập nhật**: launcher không tự dò bản mới. Tab "Trang dự án" liệt kê các bản trên GitHub Releases và các tệp của
+  mỗi bản (`AutoUpdate.exe`, `nmco3.dll`); bấm cài thì launcher hiện địa chỉ tải để xác nhận, tải và kiểm SHA-256 TẤT CẢ
+  các tệp rồi mới cài: `AutoUpdate.exe` thay chính launcher (đổi tên file rồi khởi động lại), `nmco3.dll` vào thư mục game.
+  Trang chỉ chọn tệp nào cài, không chọn chỗ cài; tên lạ bị từ chối. Cài khi game đang chạy bị từ chối.
+- **`nmco3.dll`**: bản của dự án thay cho bản gốc của Nexon, nhận ra qua thông tin phiên bản (`ProductName` bắt đầu bằng
+  `OpenCrazyArcade`). Máy chủ chỉ cấp nó khi thư mục game chưa có bản của dự án; không bao giờ ghi đè bản đã có.
 - **Dữ liệu** nằm ở `C:\ProgramData\OpenCrazyArcade` (`launcher.json`, `logs\`, `Updates\`, `WebView2\`).
 - Cần [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/); launcher tự báo nếu thiếu.
 

@@ -70,6 +70,12 @@ jobs:
           $got = (Get-Item dist/AutoUpdate.exe).VersionInfo.FileVersion
           if ($got -ne $want) { throw "AutoUpdate.exe has version $got, expected $want" }
 
+          # The launcher installs nmco3.dll from the project page and tells it from Nexon's original by this
+          # version resource (Nmco3File.IsOurs): a build without it would be refused on every machine.
+          $dll = (Get-Item dist/nmco3.dll).VersionInfo
+          if ($dll.FileVersion -ne $want) { throw "nmco3.dll has version $($dll.FileVersion), expected $want" }
+          if (-not "$($dll.ProductName)".StartsWith('OpenCrazyArcade')) { throw "nmco3.dll ProductName is '$($dll.ProductName)'" }
+
           # build the list first: SHA256SUMS.txt must not hash itself
           $sums = Get-ChildItem dist | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
           $sums | Set-Content dist/SHA256SUMS.txt

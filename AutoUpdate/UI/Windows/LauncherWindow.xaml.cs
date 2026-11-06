@@ -224,9 +224,13 @@ internal partial class LauncherWindow : Window
     // ── Trang dự án <-> launcher (WebView2 postMessage) ─────────────────────────────────────────
     // The project page (first tab) lists the launcher releases and may ask this launcher to install one - newer or
     // older. Only that page is listened to (its origin is checked on every message); it names the exe to download.
-    //   page -> launcher  { action: "hello" }                                   -> { type: "hello", version: "1.0.0" }
-    //   page -> launcher  { action: "install", version, url, sha256? }          -> confirm, download, restart
-    //   launcher -> page  { type: "install", state: "confirm" | "declined" | "downloading" | "error", ... }
+    //   page -> launcher  { action: "hello" }          -> { type: "hello", version: "1.0.0", nmco3: "1.0.0" | null }
+    //   page -> launcher  { action: "install", version, files: [{ name, url, sha256? }, ...] }
+    //                                                  -> confirm, download all, check all, then install
+    //   launcher -> page  { type: "install", state: "declined" | "downloading" | "done" | "error", ... }
+    // The page lists the files of a release (AutoUpdate.exe, nmco3.dll) and the launcher installs each one where it
+    // belongs: AutoUpdate.exe replaces the launcher (and restarts it), nmco3.dll goes to the game folder. Any other
+    // name is refused: a page chooses WHAT to install, never WHERE.
     /// <summary>The project page the first tab shows. Fixed on purpose: this page may ask the launcher to install an exe,
     /// so nothing on the machine (an environment variable, a config file) may swap it.</summary>
     private const string ProjectHomeUrl = "https://opencrazyarcade.github.io/on-launcher";
@@ -261,55 +265,133 @@ internal partial class LauncherWindow : Window
 
             if (action == "hello")
             {
-                ReplyToPage(new { type = "hello", version = SelfUpdater.CurrentVersionText });
+                string ca = FindGameExecutable();
+                ReplyToPage(new { type = "hello", version = SelfUpdater.CurrentVersionText,
+                                  nmco3 = ca == null ? null : Nmco3File.InstalledVersion(Path.GetDirectoryName(ca)) });
             }
             else if (action == "install")
             {
-                await InstallFromPageAsync(Str("version"), Str("url"), Str("sha256"));
+                var files = new System.Collections.Generic.List<PageFile>();
+                if (root.TryGetProperty("files", out var arr) && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    foreach (var f in arr.EnumerateArray())
+                    {
+                        if (f.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                        string Field(string name) => f.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
+                        files.Add(new PageFile(Field("name"), Field("url"), Field("sha256")));
+                    }
+                await InstallFromPageAsync(Str("version"), files);
             }
         }
         catch (Exception ex) { _logger.LogWarning(ex, "[PAGE] loi khi xu ly tin nhan: {Message}", ex.Message); }
     }
 
-    private async Task InstallFromPageAsync(string version, string url, string sha256)
+    private sealed record PageFile(string Name, string Url, string Sha256);
+
+    private async Task InstallFromPageAsync(string version, System.Collections.Generic.List<PageFile> files)
     {
         void Fail(string message) => ReplyToPage(new { type = "install", state = "error", message });
 
         if (_modalBusy) { Fail("Launcher đang chờ bạn trả lời một hộp thoại khác."); return; }
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+
+        // What may be installed, and where each file goes, is decided here and not by the page.
+        PageFile exeFile = null, dllFile = null;
+        foreach (var f in files)
         {
-            Fail("Địa chỉ tải phải là https://.");
-            return;
+            if (!Uri.TryCreate(f.Url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)
+            {
+                Fail($"Địa chỉ tải của {f.Name} phải là https://.");
+                return;
+            }
+            if (string.Equals(f.Name, "AutoUpdate.exe", StringComparison.OrdinalIgnoreCase) && exeFile == null) exeFile = f;
+            else if (string.Equals(f.Name, Nmco3File.FileName, StringComparison.OrdinalIgnoreCase) && dllFile == null) dllFile = f;
+            else { Fail($"Tệp không được phép cài: {f.Name}"); return; }
         }
-        // The launcher also carries the game's NMCO pipe: restarting it under a running game would cut the game off.
+        if (exeFile == null && dllFile == null) { Fail("Không có tệp nào để cài."); return; }
+
+        // The launcher also carries the game's NMCO pipe, and CA.exe has nmco3.dll loaded: changing either under a
+        // running game would cut it off.
         if (IsGameRunning()) { Fail("Trò chơi đang chạy. Hãy thoát game trước khi đổi phiên bản launcher."); return; }
+
+        string gameDir = null;
+        if (dllFile != null)
+        {
+            string ca = FindGameExecutable();
+            if (ca == null) { Fail(MissingGameText); return; }
+            gameDir = Path.GetDirectoryName(ca);
+        }
 
         _modalBusy = true;
         try
         {
             string current = SelfUpdater.CurrentVersionText;
-            string direction = Version.TryParse(version, out var target)
+            string direction = exeFile != null && Version.TryParse(version, out var target)
                 ? (target > SelfUpdater.CurrentVersion ? " (nâng cấp)" : target < SelfUpdater.CurrentVersion ? " (hạ cấp)" : " (cài lại)")
                 : "";
+            var list = new StringBuilder();
+            foreach (var f in new[] { exeFile, dllFile }.Where(f => f != null))
+                list.Append("  • ").Append(f.Name).Append("\n      ").Append(f.Url).Append('\n');
             BringToFront();
             var ask = MessageBox.Show(this,
-                $"Bạn có muốn cài đặt phiên bản\n{uri}\n\nthay thế cho v{current}?{direction}\n\nLauncher sẽ tự khởi động lại.",
-                "Cài đặt phiên bản launcher", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+                $"Bạn có muốn cài đặt phiên bản v{version}{direction}?\n\nCác tệp sẽ được tải về và cài:\n{list}" +
+                (exeFile != null ? $"\nLauncher (hiện là v{current}) sẽ tự khởi động lại." : ""),
+                "Cài đặt phiên bản", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
             if (ask != MessageBoxResult.Yes)
             {
                 ReplyToPage(new { type = "install", state = "declined" });
                 return;
             }
 
-            _logger.LogInformation("[PAGE] cai dat {Version} tu {Url} (dang dung {Current})", version, uri, current);
+            _logger.LogInformation("[PAGE] cai dat {Version}: {Files} (dang dung {Current})", version,
+                string.Join(", ", files.Select(f => f.Name)), current);
             ReplyToPage(new { type = "install", state = "downloading", percent = 0 });
-            TxtStatus.Text = "Đang tải launcher...";
-            bool started = await _selfUpdater.InstallAsync(uri.ToString(), sha256,
-                pct => Dispatcher.BeginInvoke(() => { TxtStatus.Text = $"Đang tải launcher... {pct}%"; ReplyToPage(new { type = "install", state = "downloading", percent = pct }); }),
-                msg => Dispatcher.Invoke(() => { Fail(msg); MessageBox.Show(this, msg, "Cài đặt phiên bản launcher", MessageBoxButton.OK, MessageBoxImage.Warning); }));
-            if (!started) { TxtStatus.Text = "Không cài được phiên bản launcher."; return; }
 
-            Application.Current.Shutdown();
+            void OnError(string msg) => Dispatcher.Invoke(() =>
+            {
+                Fail(msg);
+                MessageBox.Show(this, msg, "Cài đặt phiên bản", MessageBoxButton.OK, MessageBoxImage.Warning);
+            });
+            void Report(string name, int pct) => Dispatcher.BeginInvoke(() =>
+            {
+                TxtStatus.Text = $"Đang tải {name}... {pct}%";
+                ReplyToPage(new { type = "install", state = "downloading", percent = pct, file = name });
+            });
+
+            // 1. Download and check EVERY file before changing anything.
+            string stagedDll = null, stagedExe = null;
+            if (dllFile != null)
+            {
+                TxtStatus.Text = "Đang tải nmco3.dll...";
+                stagedDll = await Nmco3File.StageAsync(_logger, dllFile.Url, dllFile.Sha256, pct => Report("nmco3.dll", pct), OnError);
+                if (stagedDll == null) { TxtStatus.Text = "Không cài được nmco3.dll."; return; }
+            }
+            if (exeFile != null)
+            {
+                TxtStatus.Text = "Đang tải launcher...";
+                stagedExe = await _selfUpdater.StageAsync(exeFile.Url, exeFile.Sha256, pct => Report("AutoUpdate.exe", pct), OnError);
+                if (stagedExe == null)
+                {
+                    if (stagedDll != null) try { File.Delete(stagedDll); } catch { }
+                    TxtStatus.Text = "Không cài được phiên bản launcher.";
+                    return;
+                }
+            }
+
+            // 2. Install. nmco3.dll first: if it cannot be written, the launcher has not been touched yet.
+            if (stagedDll != null && !Nmco3File.Apply(_logger, stagedDll, gameDir, OnError))
+            {
+                if (stagedExe != null) try { File.Delete(stagedExe); } catch { }
+                TxtStatus.Text = "Không cài được nmco3.dll.";
+                return;
+            }
+            if (stagedExe != null)
+            {
+                if (!_selfUpdater.CommitAndRestart(stagedExe, OnError)) { TxtStatus.Text = "Không cài được phiên bản launcher."; return; }
+                Application.Current.Shutdown();
+                return;
+            }
+
+            TxtStatus.Text = "Đã cài nmco3.dll.";
+            ReplyToPage(new { type = "install", state = "done", nmco3 = Nmco3File.InstalledVersion(gameDir) });
         }
         finally { _modalBusy = false; }
     }
@@ -961,6 +1043,15 @@ savesettings=1
                             localHash = $"(doc that bai: {ex.Message})";
                             needDownload = true;
                         }
+                    }
+
+                    // nmco3.dll belongs to the launcher (a release of the project page): the server only provides
+                    // it while there is none of ours, never replaces one, or it would undo the version installed there.
+                    if (needDownload && string.Equals(localRel, Nmco3File.FileName, StringComparison.OrdinalIgnoreCase)
+                        && Nmco3File.IsOurs(targetFile))
+                    {
+                        needDownload = false;
+                        _logger.LogInformation("[UPDATE] nmco3.dll cua launcher da co: bo qua ban cua may chu");
                     }
 
                     _logger.LogInformation("[UPDATE] {Path}: may={Local} / server={Remote} -> {Verdict}",
