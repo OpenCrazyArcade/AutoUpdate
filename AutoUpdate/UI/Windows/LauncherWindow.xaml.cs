@@ -154,6 +154,11 @@ internal partial class LauncherWindow : Window
     // starts: so copying only AutoUpdate.exe into the game folder is enough. It never looks for another launcher
     // version (that stays the project page's job, which is what lets you go back to an older one).
     private bool _componentSyncRunning;
+    private bool _checkUpdatesRunning;
+
+    /// <summary>True while the launcher is writing files into the game folder (client files at start-up, or the server's
+    /// update). The page must not start an install then, and is told so (hello.busy) to grey its buttons out.</summary>
+    private bool IsUpdatingFiles => _componentSyncRunning || _checkUpdatesRunning;
 
     private async Task SyncComponentsAsync()
     {
@@ -167,6 +172,7 @@ internal partial class LauncherWindow : Window
         _componentSyncRunning = true;
         BtnStart.IsEnabled = false;
         BtnStart.Content = "⏳ Đang Cập Nhật...";
+        SendHelloToPage();
         try
         {
             TxtStatus.Text = "Đang kiểm tra các tệp client của dự án...";
@@ -355,7 +361,7 @@ internal partial class LauncherWindow : Window
     private void SendHelloToPage()
     {
         string ca = FindGameExecutable();
-        ReplyToPage(new { type = "hello", version = SelfUpdater.CurrentVersionText,
+        ReplyToPage(new { type = "hello", version = SelfUpdater.CurrentVersionText, busy = IsUpdatingFiles,
                           components = ca == null ? new System.Collections.Generic.Dictionary<string, string>()
                                                   : ClientComponents.Snapshot(Path.GetDirectoryName(ca)) });
     }
@@ -365,6 +371,7 @@ internal partial class LauncherWindow : Window
         void Fail(string message) => ReplyToPage(new { type = "install", state = "error", message });
 
         if (_modalBusy) { Fail("Launcher đang chờ bạn trả lời một hộp thoại khác."); return; }
+        if (IsUpdatingFiles) { Fail("Launcher đang cập nhật tệp game. Hãy đợi xong rồi thử lại."); return; }
 
         // What may be installed, and where each file goes, is decided here and not by the page.
         PageFile exeFile = null;
@@ -1060,6 +1067,8 @@ savesettings=1
         BtnStart.IsEnabled = false;
         BtnStart.Content = "⏳ Đang Cập Nhật...";
         TxtStatus.Text = "Đang kiểm tra bản cập nhật máy chủ...";
+        _checkUpdatesRunning = true;
+        SendHelloToPage();
 
         try
         {
@@ -1241,12 +1250,14 @@ savesettings=1
         }
         finally
         {
+            _checkUpdatesRunning = false;
             if (!IsGameRunning())
             {
                 BtnStart.IsEnabled = true;
                 BtnStart.Content = "▶ Bắt Đầu";
                 BtnStart.Style = (Style)Resources["NostalgicOrangeButton"];
             }
+            SendHelloToPage();
         }
     }
 

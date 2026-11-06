@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Trong lúc launcher đang ghi tệp vào thư mục game (đồng bộ tệp client lúc mở, hoặc cập nhật từ máy chủ), tab Trang dự án bị khoá nút cài và nói "đang cập nhật tệp game"; yêu cầu cài đến lúc đó cũng bị launcher từ chối. Trước đây vẫn bấm được và hộp xác nhận cài chồng lên.
+
+
 ## [1.4.0] - 2026-11-07
 - Bản thử: bản đầy đủ, dùng để thử nâng cấp lên số phiên bản phụ mới.
 
