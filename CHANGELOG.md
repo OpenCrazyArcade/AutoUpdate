@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bản thử: `CAPlay.dll` trở lại.
+
 ## [1.3.3] - 2026-11-07
 - Bản thử: không kèm `CAPlay.dll`.
 
