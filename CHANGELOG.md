@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-07
 - Bản thử: bản đầy đủ, dùng để thử nâng cấp lên số phiên bản phụ mới.
 
 ## [1.3.9] - 2026-11-07
