@@ -286,7 +286,7 @@
                     <!-- Server URL -->
                     <TextBlock Text="Địa chỉ Máy Chủ:" FontSize="12" FontWeight="SemiBold" Foreground="#333" Margin="0,0,0,4"/>
                     <TextBox x:Name="TxtServerUrl" Height="30" FontSize="13" VerticalContentAlignment="Center" Padding="6,0" Margin="0,0,0,4"/>
-                    <TextBlock Text="Địa chỉ do chủ máy chủ cung cấp, ví dụ: https://may-chu.example hoặc http://127.0.0.1:18996" FontSize="11" Foreground="#666" Margin="0,0,0,14"/>
+                    <TextBlock Text="Địa chỉ do chủ máy chủ cung cấp, ví dụ: https://may-chu.example" FontSize="11" Foreground="#666" Margin="0,0,0,14"/>
 
                     <!-- Checkboxes -->
                     <CheckBox x:Name="ChkConfigWindowedMode" Content="Khởi động game ở chế độ cửa sổ (Windowed Mode)"

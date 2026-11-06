@@ -227,20 +227,9 @@ internal partial class LauncherWindow : Window
     //   page -> launcher  { action: "hello" }                                   -> { type: "hello", version: "1.0.0" }
     //   page -> launcher  { action: "install", version, url, sha256? }          -> confirm, download, restart
     //   launcher -> page  { type: "install", state: "confirm" | "declined" | "downloading" | "error", ... }
-    private const string DefaultProjectHome = "https://opencrazyarcade.github.io/on-launcher";
-    public const string ProjectHomeEnv = "OCA_PROJECT_URL";
-
-    /// <summary>The project page the first tab shows. The user environment variable <c>OCA_PROJECT_URL</c> swaps it (a copy hosted for testing).</summary>
-    private static string ProjectHomeUrl
-    {
-        get
-        {
-            string v = Environment.GetEnvironmentVariable(ProjectHomeEnv, EnvironmentVariableTarget.Process);
-            if (string.IsNullOrWhiteSpace(v)) v = Environment.GetEnvironmentVariable(ProjectHomeEnv, EnvironmentVariableTarget.User);
-            return Uri.TryCreate(v?.Trim(), UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp)
-                ? v.Trim() : DefaultProjectHome;
-        }
-    }
+    /// <summary>The project page the first tab shows. Fixed on purpose: this page may ask the launcher to install an exe,
+    /// so nothing on the machine (an environment variable, a config file) may swap it.</summary>
+    private const string ProjectHomeUrl = "https://opencrazyarcade.github.io/on-launcher";
 
     private bool IsProjectPage(string source)
     {
