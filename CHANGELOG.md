@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-11-07
 ### Fixed
 - Tab "Trang dự án"/"Trang máy chủ" không còn bị cache: trang trên GitHub Pages bảo trình duyệt giữ 10 phút nên bản mới của trang (và danh sách phiên bản) không hiện, kể cả khi tải lại. Launcher xoá và tắt cache HTTP của WebView (như "Disable cache" trong công cụ phát triển, nhưng luôn bật).
 
