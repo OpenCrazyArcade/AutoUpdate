@@ -1214,8 +1214,7 @@ savesettings=1
             @"C:\Program Files\VNG\Boom\CA.exe",
             @"D:\VNG\Boom\ca.exe",
             @"D:\VNG\Boom\CA.exe",
-            @"E:\VNG\Boom\ca.exe",
-            @"C:\Works\Remakes\OpenCrazyArcade\Debug\ca.exe"
+            @"E:\VNG\Boom\ca.exe"
         ];
         foreach (var p in defaultPaths)
         {
