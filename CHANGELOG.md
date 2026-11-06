@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bản thử: bản đầy đủ trở lại.
+
 ## [1.3.8] - 2026-11-07
 - Bản thử: không kèm `ddraw.dll` và `CAPlay.dll` (chỉ các tệp dựng bởi workflow).
 
