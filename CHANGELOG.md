@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bản thử để kiểm tra nâng cấp từ 1.1.0: không đổi chức năng.
+
 ## [1.1.0] - 2026-11-07
 ### Added
 - Tab "Trang dự án" cài được `nmco3.dll`, `ehsvc.dll`, `hsupdate.exe`, `CAPlay.dll`, `ddraw.dll` cùng launcher (hoặc riêng). Mỗi bản phát hành có `attachments.json`; trang chỉ đề nghị các tệp khác với bản đang cài (so SHA-256).
