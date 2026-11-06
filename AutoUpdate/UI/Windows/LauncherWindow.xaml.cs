@@ -166,6 +166,7 @@ internal partial class LauncherWindow : Window
 
         _componentSyncRunning = true;
         BtnStart.IsEnabled = false;
+        BtnStart.Content = "⏳ Đang Cập Nhật...";
         try
         {
             TxtStatus.Text = "Đang kiểm tra các tệp client của dự án...";
@@ -203,7 +204,11 @@ internal partial class LauncherWindow : Window
             _componentSyncRunning = false;
             SendHelloToPage();      // the page may have asked before the files were in place
             // CheckUpdatesAsync (next) decides the final state of the button; when it will not run, restore it here.
-            if (!_config.AutoCheckUpdateAtStartup || !_config.HasServer) BtnStart.IsEnabled = _config.HasServer && !IsGameRunning();
+            if (!_config.AutoCheckUpdateAtStartup || !_config.HasServer)
+            {
+                BtnStart.IsEnabled = _config.HasServer && !IsGameRunning();
+                BtnStart.Content = _config.HasServer ? "▶ Bắt Đầu" : "Chưa cấu hình";
+            }
         }
     }
 
