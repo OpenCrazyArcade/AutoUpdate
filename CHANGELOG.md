@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bản thử: phát hành không kèm `ddraw.dll` để kiểm tra bản phát hành thiếu tệp (trang dự án chỉ đề nghị các tệp có trong bản).
+
 ## [1.1.1] - 2026-11-07
 - Bản thử để kiểm tra nâng cấp từ 1.1.0: không đổi chức năng.
 
