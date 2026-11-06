@@ -1,0 +1,86 @@
+name: build-and-release
+
+# Version = the git tag.
+#   git tag v1.2.3 && git push origin v1.2.3   ->  builds, then publishes a GitHub Release "v1.2.3"
+# A push to main / a pull request only builds (version 0.0.0) to catch a broken build early.
+# "Run workflow" (workflow_dispatch) builds a given X.Y.Z without publishing a release.
+on:
+  push:
+    branches: [main]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, X.Y.Z (no release is created)'
+        required: true
+
+permissions:
+  contents: write   # create the release and upload its files
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The SDK comes from global.json (10.0.x), the same one used on the developer machine.
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Work out the version
+        id: ver
+        shell: pwsh
+        run: |
+          if ('${{ github.ref_type }}' -eq 'tag') { $v = '${{ github.ref_name }}'.TrimStart('v') }
+          elseif ('${{ inputs.version }}' -ne '') { $v = '${{ inputs.version }}' }
+          else { $v = '0.0.0' }
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Not a X.Y.Z version: '$v'" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "Building version $v"
+
+      # Native AOT (nmco3.dll) is linked by the MSVC tools, which the build finds through vswhere.
+      # The runner has it already; this only makes sure it is on PATH.
+      - name: vswhere on PATH
+        shell: pwsh
+        run: |
+          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer" >> $env:GITHUB_PATH
+          Get-Command vswhere -ErrorAction SilentlyContinue | Select-Object Source
+
+      - name: Publish autoupdate.exe
+        run: dotnet publish AutoUpdate/AutoUpdate.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/autoupdate
+
+      - name: Publish nmco3.dll
+        run: dotnet publish NMCO3/NMCO3.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/nmco3
+
+      - name: Collect the files and check the version
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item out/autoupdate/autoupdate.exe dist/AutoUpdate.exe
+          Copy-Item out/nmco3/nmco3.dll dist/nmco3.dll
+
+          # The launcher compares this number with the release tag: it must be the tag.
+          $want = '${{ steps.ver.outputs.version }}.0'
+          $got = (Get-Item dist/AutoUpdate.exe).VersionInfo.FileVersion
+          if ($got -ne $want) { throw "AutoUpdate.exe has version $got, expected $want" }
+
+          # build the list first: SHA256SUMS.txt must not hash itself
+          $sums = Get-ChildItem dist | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+          $sums | Set-Content dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autoupdate-${{ steps.ver.outputs.version }}
+          path: dist/*
+
+      - name: Create the GitHub Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create '${{ github.ref_name }}' dist/AutoUpdate.exe dist/nmco3.dll dist/SHA256SUMS.txt `
+            --title 'AutoUpdate ${{ github.ref_name }}' --generate-notes

@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<UseWPF>true</UseWPF>
+		<!--  -->
+		<Platforms>x86</Platforms>
+		<PlatformTarget>x86</PlatformTarget>
+		<RuntimeIdentifier>win-x86</RuntimeIdentifier>
+		<TargetFramework>net10.0-windows</TargetFramework>
+		<!--  -->
+		<Nullable>disable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<!--  -->
+		<RootNamespace>OpenCrazyArcade.AutoUpdate</RootNamespace>
+		<StartupObject>OpenCrazyArcade.AutoUpdate.Program</StartupObject>
+		<AssemblyName>autoupdate</AssemblyName>
+		<!-- The version the self-update compares with the "tag_name" of the latest release. -->
+		<Version>1.0.0</Version>
+
+		<!-- Standalone Single-File Configuration -->
+		<PublishSingleFile>true</PublishSingleFile>
+		<SelfContained>true</SelfContained>
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+		<!-- Without this the single file is 160MB instead of 73MB. It is easy to forget on the
+		     command line and nothing warns about it, so it lives here. -->
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+		<PublishDocumentationFiles>false</PublishDocumentationFiles>
+		<DebugType>none</DebugType>
+		<DebugSymbols>false</DebugSymbols>
+		<ApplicationManifest>app.manifest</ApplicationManifest>
+		<ApplicationIcon>Assets\app.ico</ApplicationIcon>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+		<PackageReference Include="CompiledBindings.WPF" Version="1.0.19.7" />
+		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.13" />
+		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Resource Include="Assets\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- the NMCO pipe contract shared with nmco3.dll -->
+		<ProjectReference Include="..\Ipc\Ipc.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Models\" />
+	  <Folder Include="ViewModels\" />
+	</ItemGroup>
+
+</Project>

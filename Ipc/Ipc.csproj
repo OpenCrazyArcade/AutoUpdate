@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- The wire contract between nmco3.dll (Native AOT, inside CA.exe) and the launcher. Both reference this project, so
+	     a message is written in one place and read with the same type on the other side. AOT-safe: System.Text.Json
+	     source generation only, no reflection. -->
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>disable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Platforms>x86</Platforms>
+		<PlatformTarget>x86</PlatformTarget>
+		<RootNamespace>OpenCrazyArcade.Ipc</RootNamespace>
+		<AssemblyName>OpenCrazyArcade.Ipc</AssemblyName>
+		<IsAotCompatible>true</IsAotCompatible>
+	</PropertyGroup>
+
+</Project>

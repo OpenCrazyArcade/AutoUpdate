@@ -1,0 +1,8 @@
+﻿<Application x:Class="OpenCrazyArcade.AutoUpdate.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:OpenCrazyArcade.AutoUpdate">
+    <Application.Resources>
+         
+    </Application.Resources>
+</Application>
