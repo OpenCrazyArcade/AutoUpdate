@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Sau khi tự đồng bộ tệp client lúc mở, launcher báo lại cho trang dự án để trang cập nhật (trước đó trang vẫn hiện "lệch N tệp" vì đã hỏi trước khi đồng bộ xong).
+
+
 ## [1.3.5] - 2026-11-07
 - Bản thử: bản đầy đủ cuối của loạt 1.3.x.
 

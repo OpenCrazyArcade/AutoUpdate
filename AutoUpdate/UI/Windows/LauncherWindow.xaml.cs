@@ -201,6 +201,7 @@ internal partial class LauncherWindow : Window
         finally
         {
             _componentSyncRunning = false;
+            SendHelloToPage();      // the page may have asked before the files were in place
             // CheckUpdatesAsync (next) decides the final state of the button; when it will not run, restore it here.
             if (!_config.AutoCheckUpdateAtStartup || !_config.HasServer) BtnStart.IsEnabled = _config.HasServer && !IsGameRunning();
         }
@@ -324,13 +325,7 @@ internal partial class LauncherWindow : Window
             string action = root.TryGetProperty("action", out var a) ? a.GetString() : null;
             string Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
 
-            if (action == "hello")
-            {
-                string ca = FindGameExecutable();
-                ReplyToPage(new { type = "hello", version = SelfUpdater.CurrentVersionText,
-                                  components = ca == null ? new System.Collections.Generic.Dictionary<string, string>()
-                                                          : ClientComponents.Snapshot(Path.GetDirectoryName(ca)) });
-            }
+            if (action == "hello") SendHelloToPage();
             else if (action == "install")
             {
                 var files = new System.Collections.Generic.List<PageFile>();
@@ -348,6 +343,17 @@ internal partial class LauncherWindow : Window
     }
 
     private sealed record PageFile(string Name, string Url, string Sha256);
+
+    /// <summary>Tells the page which launcher this is and what is installed. The page asks for it when it loads, and the
+    /// launcher pushes it again whenever the files change behind the page's back (start-up sync), so what the page shows
+    /// never goes stale.</summary>
+    private void SendHelloToPage()
+    {
+        string ca = FindGameExecutable();
+        ReplyToPage(new { type = "hello", version = SelfUpdater.CurrentVersionText,
+                          components = ca == null ? new System.Collections.Generic.Dictionary<string, string>()
+                                                  : ClientComponents.Snapshot(Path.GetDirectoryName(ca)) });
+    }
 
     private async Task InstallFromPageAsync(string version, System.Collections.Generic.List<PageFile> files)
     {
