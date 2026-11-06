@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Không đổi chức năng: bản vá để thử quy trình phát hành mới (mô tả release lấy từ CHANGELOG).
 
 ## [1.0.0] - 2026-11-06
 - Bản đầu tiên của launcher OpenCrazyArcade (`AutoUpdate.exe`) và `nmco3.dll`.
