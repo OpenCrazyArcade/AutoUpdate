@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-07
 - Bản thử: `ddraw.dll` trở lại bản phát hành.
 
 ## [1.1.2] - 2026-11-07
