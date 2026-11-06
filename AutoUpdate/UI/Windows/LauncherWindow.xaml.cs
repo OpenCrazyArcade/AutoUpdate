@@ -721,6 +721,19 @@ savesettings=1
 
             NewsWebView.CoreWebView2.WebMessageReceived += OnPageMessage;
 
+            // The project page is on GitHub Pages, which tells browsers to keep a page for ten minutes, and the page
+            // lists releases fetched from the GitHub API: with the HTTP cache on, a new version of either did not show
+            // up (not even on reload). The tab is small and its content changes, so the cache is emptied and switched
+            // off for it - what "Disable cache" does in the developer tools, which only lasts while they are open.
+            try
+            {
+                var core = NewsWebView.CoreWebView2;
+                await core.CallDevToolsProtocolMethodAsync("Network.enable", "{}");
+                await core.CallDevToolsProtocolMethodAsync("Network.clearBrowserCache", "{}");
+                await core.CallDevToolsProtocolMethodAsync("Network.setCacheDisabled", "{\"cacheDisabled\":true}");
+            }
+            catch (Exception ex) { _logger.LogWarning("Khong tat duoc cache cua WebView: {Message}", ex.Message); }
+
             NavigateToProjectHome();
         }
         catch (Exception ex)

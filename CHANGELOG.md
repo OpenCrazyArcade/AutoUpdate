@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+- Tab "Trang dự án"/"Trang máy chủ" không còn bị cache: trang trên GitHub Pages bảo trình duyệt giữ 10 phút nên bản mới của trang (và danh sách phiên bản) không hiện, kể cả khi tải lại. Launcher xoá và tắt cache HTTP của WebView (như "Disable cache" trong công cụ phát triển, nhưng luôn bật).
+
+
 ## [1.4.3] - 2026-11-07
 ### Changed
 - `CAPlay.dll` liên kết CRT tĩnh và biên dịch MinHook cùng dự án: không còn cần cài Microsoft Visual C++ Redistributable trên máy người chơi (chỉ phụ thuộc DLL hệ thống của Windows).
