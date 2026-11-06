@@ -162,7 +162,27 @@ internal partial class LauncherWindow : Window
 
     /// <summary>True while the launcher is writing files into the game folder (client files at start-up, or the server's
     /// update). The page must not start an install then, and is told so (hello.busy) to grey its buttons out.</summary>
-    private bool IsUpdatingFiles => _componentSyncRunning || _checkUpdatesRunning;
+    private bool IsUpdatingFiles => _componentSyncRunning || _checkUpdatesRunning || _pageInstallRunning;
+
+    private bool _pageInstallRunning;
+
+    /// <summary>An install requested from the project page is downloading or writing files: the play button says so and
+    /// is off until it is done (the same state the start-up sync and the server update show).</summary>
+    private void SetPageInstallBusy(bool busy)
+    {
+        _pageInstallRunning = busy;
+        if (busy)
+        {
+            BtnStart.IsEnabled = false;
+            BtnStart.Content = "⏳ Đang Cập Nhật...";
+        }
+        else if (!IsUpdatingFiles && !IsGameRunning())
+        {
+            BtnStart.IsEnabled = _config.HasServer;
+            BtnStart.Content = _config.HasServer ? "▶ Bắt Đầu" : "Chưa cấu hình";
+        }
+        SendHelloToPage();
+    }
 
     private async Task SyncComponentsAsync()
     {
@@ -430,6 +450,7 @@ internal partial class LauncherWindow : Window
             _logger.LogInformation("[PAGE] cai dat {Version}: {Files} (dang dung {Current})", version,
                 string.Join(", ", files.Select(f => f.Name)), current);
             ReplyToPage(new { type = "install", state = "downloading", percent = 0 });
+            SetPageInstallBusy(true);
 
             void OnError(string msg) => Dispatcher.Invoke(() =>
             {
@@ -487,7 +508,11 @@ internal partial class LauncherWindow : Window
             TxtStatus.Text = "Đã cài: " + string.Join(", ", staged.Select(s => s.Component.Name));
             ReplyToPage(new { type = "install", state = "done" });
         }
-        finally { _modalBusy = false; }
+        finally
+        {
+            _modalBusy = false;
+            if (_pageInstallRunning) SetPageInstallBusy(false);
+        }
     }
 
     // ── Cap nhat khi launcher dang mo ───────────────────────────────────────────────────────
@@ -1307,7 +1332,7 @@ savesettings=1
 
     private async void BtnStart_Click(object sender, RoutedEventArgs e)
     {
-        if (_componentSyncRunning) { TxtStatus.Text = "Đang đồng bộ tệp client, hãy đợi một chút."; return; }
+        if (_componentSyncRunning || _pageInstallRunning) { TxtStatus.Text = "Đang cập nhật tệp, hãy đợi một chút."; return; }
         if (IsGameRunning())
         {
             // Kill game process
