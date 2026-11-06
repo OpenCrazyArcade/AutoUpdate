@@ -224,13 +224,15 @@ internal partial class LauncherWindow : Window
     // ── Trang dự án <-> launcher (WebView2 postMessage) ─────────────────────────────────────────
     // The project page (first tab) lists the launcher releases and may ask this launcher to install one - newer or
     // older. Only that page is listened to (its origin is checked on every message); it names the exe to download.
-    //   page -> launcher  { action: "hello" }          -> { type: "hello", version: "1.0.0", nmco3: "1.0.0" | null }
+    //   page -> launcher  { action: "hello" }          -> { type: "hello", version: "1.0.0", components: { "nmco3.dll": sha256 | null, ... } }
     //   page -> launcher  { action: "install", version, files: [{ name, url, sha256? }, ...] }
     //                                                  -> confirm, download all, check all, then install
     //   launcher -> page  { type: "install", state: "declined" | "downloading" | "done" | "error", ... }
-    // The page lists the files of a release (AutoUpdate.exe, nmco3.dll) and the launcher installs each one where it
-    // belongs: AutoUpdate.exe replaces the launcher (and restarts it), nmco3.dll goes to the game folder. Any other
-    // name is refused: a page chooses WHAT to install, never WHERE.
+    // The page lists the files of a release and the launcher installs each one where its own table says
+    // (ClientComponents): AutoUpdate.exe replaces the launcher (and restarts it); nmco3.dll, ehsvc.dll, hsupdate.exe,
+    // CAPlay.dll and ddraw.dll go to the game folder. Any other name is refused: a page chooses WHAT to install, never
+    // WHERE. "components" in the hello reply is the SHA-256 of what is installed, so the page can tell which files of a
+    // release differ.
     /// <summary>The project page the first tab shows. Fixed on purpose: this page may ask the launcher to install an exe,
     /// so nothing on the machine (an environment variable, a config file) may swap it.</summary>
     private const string ProjectHomeUrl = "https://opencrazyarcade.github.io/on-launcher";
@@ -267,7 +269,8 @@ internal partial class LauncherWindow : Window
             {
                 string ca = FindGameExecutable();
                 ReplyToPage(new { type = "hello", version = SelfUpdater.CurrentVersionText,
-                                  nmco3 = ca == null ? null : Nmco3File.InstalledVersion(Path.GetDirectoryName(ca)) });
+                                  components = ca == null ? new System.Collections.Generic.Dictionary<string, string>()
+                                                          : ClientComponents.Snapshot(Path.GetDirectoryName(ca)) });
             }
             else if (action == "install")
             {
@@ -294,7 +297,8 @@ internal partial class LauncherWindow : Window
         if (_modalBusy) { Fail("Launcher đang chờ bạn trả lời một hộp thoại khác."); return; }
 
         // What may be installed, and where each file goes, is decided here and not by the page.
-        PageFile exeFile = null, dllFile = null;
+        PageFile exeFile = null;
+        var parts = new System.Collections.Generic.List<(PageFile File, ClientComponent Component)>();
         foreach (var f in files)
         {
             if (!Uri.TryCreate(f.Url, UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)
@@ -302,18 +306,19 @@ internal partial class LauncherWindow : Window
                 Fail($"Địa chỉ tải của {f.Name} phải là https://.");
                 return;
             }
+            var component = ClientComponents.Find(f.Name);
             if (string.Equals(f.Name, "AutoUpdate.exe", StringComparison.OrdinalIgnoreCase) && exeFile == null) exeFile = f;
-            else if (string.Equals(f.Name, Nmco3File.FileName, StringComparison.OrdinalIgnoreCase) && dllFile == null) dllFile = f;
+            else if (component != null && parts.All(x => x.Component != component)) parts.Add((f, component));
             else { Fail($"Tệp không được phép cài: {f.Name}"); return; }
         }
-        if (exeFile == null && dllFile == null) { Fail("Không có tệp nào để cài."); return; }
+        if (exeFile == null && parts.Count == 0) { Fail("Không có tệp nào để cài."); return; }
 
-        // The launcher also carries the game's NMCO pipe, and CA.exe has nmco3.dll loaded: changing either under a
-        // running game would cut it off.
-        if (IsGameRunning()) { Fail("Trò chơi đang chạy. Hãy thoát game trước khi đổi phiên bản launcher."); return; }
+        // The launcher also carries the game's NMCO pipe, and CA.exe has these files loaded: changing any of them under
+        // a running game would cut it off.
+        if (IsGameRunning()) { Fail("Trò chơi đang chạy. Hãy thoát game trước khi cài đặt."); return; }
 
         string gameDir = null;
-        if (dllFile != null)
+        if (parts.Count > 0)
         {
             string ca = FindGameExecutable();
             if (ca == null) { Fail(MissingGameText); return; }
@@ -328,7 +333,7 @@ internal partial class LauncherWindow : Window
                 ? (target > SelfUpdater.CurrentVersion ? " (nâng cấp)" : target < SelfUpdater.CurrentVersion ? " (hạ cấp)" : " (cài lại)")
                 : "";
             var list = new StringBuilder();
-            foreach (var f in new[] { exeFile, dllFile }.Where(f => f != null))
+            foreach (var f in new[] { exeFile }.Concat(parts.Select(x => x.File)).Where(f => f != null))
                 list.Append("  • ").Append(f.Name).Append("\n      ").Append(f.Url).Append('\n');
             BringToFront();
             var ask = MessageBox.Show(this,
@@ -355,32 +360,40 @@ internal partial class LauncherWindow : Window
                 TxtStatus.Text = $"Đang tải {name}... {pct}%";
                 ReplyToPage(new { type = "install", state = "downloading", percent = pct, file = name });
             });
+            void DiscardStaged(System.Collections.Generic.IEnumerable<string> paths)
+            {
+                foreach (string s in paths) if (s != null) try { File.Delete(s); } catch { }
+            }
 
             // 1. Download and check EVERY file before changing anything.
-            string stagedDll = null, stagedExe = null;
-            if (dllFile != null)
+            var staged = new System.Collections.Generic.List<(ClientComponent Component, string Path)>();
+            foreach (var (file, component) in parts)
             {
-                TxtStatus.Text = "Đang tải nmco3.dll...";
-                stagedDll = await Nmco3File.StageAsync(_logger, dllFile.Url, dllFile.Sha256, pct => Report("nmco3.dll", pct), OnError);
-                if (stagedDll == null) { TxtStatus.Text = "Không cài được nmco3.dll."; return; }
+                TxtStatus.Text = $"Đang tải {component.Name}...";
+                string path = await ClientComponents.StageAsync(_logger, component, file.Url, file.Sha256, pct => Report(component.Name, pct), OnError);
+                if (path == null) { DiscardStaged(staged.Select(s => s.Path)); TxtStatus.Text = $"Không cài được {component.Name}."; return; }
+                staged.Add((component, path));
             }
+            string stagedExe = null;
             if (exeFile != null)
             {
                 TxtStatus.Text = "Đang tải launcher...";
                 stagedExe = await _selfUpdater.StageAsync(exeFile.Url, exeFile.Sha256, pct => Report("AutoUpdate.exe", pct), OnError);
                 if (stagedExe == null)
                 {
-                    if (stagedDll != null) try { File.Delete(stagedDll); } catch { }
+                    DiscardStaged(staged.Select(s => s.Path));
                     TxtStatus.Text = "Không cài được phiên bản launcher.";
                     return;
                 }
             }
 
-            // 2. Install. nmco3.dll first: if it cannot be written, the launcher has not been touched yet.
-            if (stagedDll != null && !Nmco3File.Apply(_logger, stagedDll, gameDir, OnError))
+            // 2. Install. The game's files first: if one cannot be written, the launcher has not been touched yet.
+            for (int i = 0; i < staged.Count; i++)
             {
-                if (stagedExe != null) try { File.Delete(stagedExe); } catch { }
-                TxtStatus.Text = "Không cài được nmco3.dll.";
+                if (ClientComponents.Apply(_logger, staged[i].Component, staged[i].Path, gameDir, OnError)) continue;
+                DiscardStaged(staged.Skip(i + 1).Select(s => s.Path));
+                DiscardStaged([stagedExe]);
+                TxtStatus.Text = $"Không cài được {staged[i].Component.Name}.";
                 return;
             }
             if (stagedExe != null)
@@ -390,8 +403,8 @@ internal partial class LauncherWindow : Window
                 return;
             }
 
-            TxtStatus.Text = "Đã cài nmco3.dll.";
-            ReplyToPage(new { type = "install", state = "done", nmco3 = Nmco3File.InstalledVersion(gameDir) });
+            TxtStatus.Text = "Đã cài: " + string.Join(", ", staged.Select(s => s.Component.Name));
+            ReplyToPage(new { type = "install", state = "done" });
         }
         finally { _modalBusy = false; }
     }
@@ -416,21 +429,6 @@ internal partial class LauncherWindow : Window
         var timer = new System.Windows.Threading.DispatcherTimer { Interval = UpdatePollInterval };
         timer.Tick += async (_, _) => OnUpdateVersion(await FetchUpdateVersionAsync(), "poll");
         timer.Start();
-    }
-
-    private async Task<System.Collections.Generic.List<string>> FetchRemovedAsync(System.Net.Http.HttpClient http, string baseUrl)
-    {
-        try
-        {
-            return await System.Net.Http.Json.HttpClientJsonExtensions.GetFromJsonAsync<System.Collections.Generic.List<string>>(
-                http, $"{baseUrl}/api/updates/removed") ?? new();
-        }
-        catch (Exception ex)
-        {
-            // An older server has no such endpoint: nothing to delete, not an error.
-            _logger.LogDebug("[UPDATE] khong lay duoc danh sach xoa: {Message}", ex.Message);
-            return new();
-        }
     }
 
     private async Task<string> FetchUpdateVersionAsync()
@@ -960,6 +958,15 @@ savesettings=1
         [property: System.Text.Json.Serialization.JsonPropertyName("downloadUrl")] string DownloadUrl
     );
 
+    private static readonly string[] ServerDataExtensions = [".idx", ".idd", ".ssd"];
+
+    /// <summary>A manifest path a server may write: a bare file name (no folder, no drive) with a data extension.</summary>
+    private static bool IsPlainGameDataFile(string path) =>
+        !string.IsNullOrWhiteSpace(path)
+        && path == Path.GetFileName(path.Replace('/', Path.DirectorySeparatorChar))
+        && !path.Contains(':')
+        && ServerDataExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
     private async Task CheckUpdatesAsync()
     {
         if (!_config.HasServer)
@@ -997,8 +1004,14 @@ savesettings=1
                 gameDir ?? "(khong tim thay)", caExe ?? "(khong tim thay)");
             _logger.LogInformation("[UPDATE] hoi manifest: {Url}", manifestUrl);
 
-            var items = await System.Net.Http.Json.HttpClientJsonExtensions.GetFromJsonAsync<List<UpdateManifestItem>>(http, manifestUrl);
-            _logger.LogInformation("[UPDATE] manifest tra ve {Count} tep", items?.Count ?? -1);
+            List<UpdateManifestItem> items = null;
+            try { items = await System.Net.Http.Json.HttpClientJsonExtensions.GetFromJsonAsync<List<UpdateManifestItem>>(http, manifestUrl); }
+            catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogInformation("[UPDATE] may chu khong co /api/updates/manifest (may chu moi chi co /resources)");
+            }
+            items ??= [];
+            _logger.LogInformation("[UPDATE] manifest tra ve {Count} tep", items.Count);
 
             if (string.IsNullOrEmpty(gameDir) || !Directory.Exists(gameDir))
             {
@@ -1010,7 +1023,7 @@ savesettings=1
                 return;
             }
 
-            if (items != null && items.Count > 0 && !string.IsNullOrEmpty(gameDir) && Directory.Exists(gameDir))
+            if (!string.IsNullOrEmpty(gameDir) && Directory.Exists(gameDir))
             {
                 int updatedCount = 0;
                 int failedCount = 0;
@@ -1019,6 +1032,16 @@ savesettings=1
                 foreach (var item in items)
                 {
                     if (string.IsNullOrWhiteSpace(item.Path)) continue;
+
+                    // A server may only supply game DATA, and only in the game folder itself: the program files (nmco3.dll,
+                    // ehsvc.dll, CAPlay.dll...) come from releases of the project (ClientComponents). Anything else is
+                    // skipped and said so. (Transitional: data the game reads by name from its own folder, until CAPlay
+                    // can load it from "from-oca".)
+                    if (!IsPlainGameDataFile(item.Path))
+                    {
+                        _logger.LogWarning("[UPDATE] bo qua '{Path}': may chu chi duoc cap tep du lieu (.idx/.idd/.ssd) o thu muc game", item.Path);
+                        continue;
+                    }
 
                     string localRel = item.Path.Replace('/', Path.DirectorySeparatorChar);
                     string targetFile = Path.Combine(gameDir, localRel);
@@ -1045,14 +1068,6 @@ savesettings=1
                         }
                     }
 
-                    // nmco3.dll belongs to the launcher (a release of the project page): the server only provides
-                    // it while there is none of ours, never replaces one, or it would undo the version installed there.
-                    if (needDownload && string.Equals(localRel, Nmco3File.FileName, StringComparison.OrdinalIgnoreCase)
-                        && Nmco3File.IsOurs(targetFile))
-                    {
-                        needDownload = false;
-                        _logger.LogInformation("[UPDATE] nmco3.dll cua launcher da co: bo qua ban cua may chu");
-                    }
 
                     _logger.LogInformation("[UPDATE] {Path}: may={Local} / server={Remote} -> {Verdict}",
                         item.Path,
@@ -1105,35 +1120,18 @@ savesettings=1
                     }
                 }
 
-                // Files the server says to delete (published once, dropped since). The manifest only adds and
-                // replaces, so without this a retired file (e.g. ddraw.dll) stays on the machine for ever.
                 int removedCount = 0;
-                foreach (string rel in await FetchRemovedAsync(http, baseUrl))
-                {
-                    try
-                    {
-                        string root = Path.GetFullPath(gameDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-                        string full = Path.GetFullPath(Path.Combine(gameDir, rel.Replace('/', Path.DirectorySeparatorChar)));
-                        string name = Path.GetFileName(full);
-                        if (!full.StartsWith(root, StringComparison.OrdinalIgnoreCase)
-                            || name.Equals("ca.exe", StringComparison.OrdinalIgnoreCase)
-                            || name.Equals("CAPlay.dll", StringComparison.OrdinalIgnoreCase))
-                        {
-                            _logger.LogWarning("[UPDATE] bo qua yeu cau xoa '{Path}' (ngoai thu muc game hoac tep duoc bao ve)", rel);
-                            continue;
-                        }
-                        if (!File.Exists(full)) continue;
 
-                        File.Delete(full);
-                        removedCount++;
-                        _logger.LogInformation("[UPDATE] {Path}: da xoa (server bao tep nay da bi go)", rel);
-                    }
-                    catch (Exception ex)
-                    {
-                        failedCount++;
-                        _logger.LogError(ex, "[UPDATE] {Path}: KHONG xoa duoc", rel);
-                    }
+                // The server's extra asset packs go to their own folder (see ServerResources).
+                var res = await ServerResources.SyncAsync(_logger, http, baseUrl, gameDir, SelfUpdater.CurrentVersion);
+                if (res.Outcome is ServerResources.Outcome.Failed or ServerResources.Outcome.Unsupported)
+                {
+                    failedCount += res.Outcome == ServerResources.Outcome.Failed ? 1 : 0;
+                    _logger.LogWarning("[RESOURCES] {Message}", res.Message);
+                    if (res.Outcome == ServerResources.Outcome.Unsupported) TxtStatus.Text = res.Message;
                 }
+                updatedCount += res.Downloaded;
+                removedCount += res.Removed;
 
                 if (failedCount > 0)
                 {

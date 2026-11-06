@@ -174,7 +174,7 @@ internal sealed class SelfUpdater(ILogger<SelfUpdater> logger)
                     }
                 }
                 catch { return; }
-                if (!left) { Nmco3File.CleanUpLeftovers(dir); return; }
+                if (!left) { ClientComponents.CleanUpLeftovers(dir); return; }
                 await Task.Delay(1000);
             }
         });

@@ -77,6 +77,9 @@ jobs:
           Copy-Item out/nmco3/nmco3.dll dist/nmco3.dll
           Copy-Item out/ehsvc/EhSvc.dll dist/ehsvc.dll
           Copy-Item out/hsupdate/HSUpdate.exe dist/hsupdate.exe
+          # committed binaries, shipped as they are (prebuilt/README.md)
+          Copy-Item prebuilt/CAPlay.dll dist/CAPlay.dll
+          Copy-Item prebuilt/ddraw.dll dist/ddraw.dll
 
           # CA.exe finds ehsvc.dll's one function by ORDINAL 10 (sub_AAB978 walks the name table comparing
           # ordinal = index + Base): so Base must be 10 with exactly one named export. See ClientStubs/EhSvc/ehsvc.def.
@@ -109,6 +112,20 @@ jobs:
           if ($dll.FileVersion -ne $want) { throw "nmco3.dll has version $($dll.FileVersion), expected $want" }
           if (-not "$($dll.ProductName)".StartsWith('OpenCrazyArcade')) { throw "nmco3.dll ProductName is '$($dll.ProductName)'" }
 
+          # attachments.json: what this release is made of. The project page reads it (it is also embedded in the
+          # release notes, because a browser cannot download release assets cross-origin) to offer only what the launcher
+          # knows how to install; the launcher keeps its own table of where each name goes (ClientComponents).
+          $attachments = [ordered]@{
+            schema = 1
+            release = '${{ steps.ver.outputs.version }}'
+            minLauncher = '${{ steps.ver.outputs.version }}'
+            files = @(Get-ChildItem dist | Sort-Object Name | ForEach-Object {
+              [ordered]@{ name = $_.Name; size = $_.Length; sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() }
+            })
+          }
+          $attachments | ConvertTo-Json -Depth 5 | Set-Content dist/attachments.json -Encoding utf8
+          Get-Content dist/attachments.json
+
           # build the list first: SHA256SUMS.txt must not hash itself
           $sums = Get-ChildItem dist | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
           $sums | Set-Content dist/SHA256SUMS.txt
@@ -127,7 +144,8 @@ jobs:
             throw "CHANGELOG.md has no (or an empty) '## [$ver]' section. Run tools/release.ps1 $ver before tagging."
           }
           $sums = Get-Content dist/SHA256SUMS.txt -Raw
-          $notes = $m.Groups['body'].Value.Trim() + "`n`n---`n**SHA-256**`n`n" + '```' + "`n" + $sums.Trim() + "`n" + '```' + "`n"
+          $attachments = (Get-Content dist/attachments.json -Raw | ConvertFrom-Json | ConvertTo-Json -Depth 5 -Compress)
+          $notes = $m.Groups['body'].Value.Trim() + "`n`n---`n**SHA-256**`n`n" + '```' + "`n" + $sums.Trim() + "`n" + '```' + "`n`n" + "<!-- attachments: $attachments -->`n"
           Set-Content release-notes.md $notes -Encoding utf8
           Get-Content release-notes.md
 
@@ -145,5 +163,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create '${{ github.ref_name }}' dist/AutoUpdate.exe dist/nmco3.dll dist/ehsvc.dll dist/hsupdate.exe dist/SHA256SUMS.txt `
+          gh release create '${{ github.ref_name }}' dist/AutoUpdate.exe dist/nmco3.dll dist/ehsvc.dll dist/hsupdate.exe dist/CAPlay.dll dist/ddraw.dll dist/attachments.json dist/SHA256SUMS.txt `
             --title 'AutoUpdate ${{ github.ref_name }}' --notes-file release-notes.md

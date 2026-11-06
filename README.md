@@ -22,12 +22,13 @@ Repo gồm các dự án sau (`AutoUpdate.slnx`):
 - **Máy chủ**: không có máy chủ mặc định. Chủ máy chủ đưa liên kết `opencrazyarcade://set-server/?src=https://...`;
   bấm vào đó, launcher hỏi lại rồi lưu địa chỉ. Cũng nhập tay được trong cửa sổ cấu hình.
 - **Một bản duy nhất**: chạy lần hai chỉ chuyển lệnh sang bản đang chạy (mutex + named pipe).
-- **Tự cập nhật**: launcher không tự dò bản mới. Tab "Trang dự án" liệt kê các bản trên GitHub Releases và các tệp của
-  mỗi bản (`AutoUpdate.exe`, `nmco3.dll`); bấm cài thì launcher hiện địa chỉ tải để xác nhận, tải và kiểm SHA-256 TẤT CẢ
-  các tệp rồi mới cài: `AutoUpdate.exe` thay chính launcher (đổi tên file rồi khởi động lại), `nmco3.dll` vào thư mục game.
-  Trang chỉ chọn tệp nào cài, không chọn chỗ cài; tên lạ bị từ chối. Cài khi game đang chạy bị từ chối.
-- **`nmco3.dll`**: bản của dự án thay cho bản gốc của Nexon, nhận ra qua thông tin phiên bản (`ProductName` bắt đầu bằng
-  `OpenCrazyArcade`). Máy chủ chỉ cấp nó khi thư mục game chưa có bản của dự án; không bao giờ ghi đè bản đã có.
+- **Cập nhật từ trang dự án**: launcher không tự dò bản mới. Tab "Trang dự án" liệt kê các bản trên GitHub Releases và các tệp của
+  mỗi bản (`AutoUpdate.exe`, `nmco3.dll`, `ehsvc.dll`, `hsupdate.exe`, `CAPlay.dll`, `ddraw.dll`); trang chỉ đề nghị tệp khác với bản đang cài.
+  Bấm cài thì launcher hiện địa chỉ tải để xác nhận, tải và kiểm SHA-256 TẤT CẢ các tệp rồi mới cài (ghi đè bản cũ bằng cách đổi tên rồi thay),
+  `AutoUpdate.exe` cuối cùng (đổi tên file rồi khởi động lại). Nơi ghi của từng tên do launcher quyết định, không phải trang; tên lạ bị từ chối.
+  Cài khi game đang chạy bị từ chối. Chi tiết: [`docs/components-and-resources.md`](docs/components-and-resources.md).
+- **Máy chủ chỉ cấp dữ liệu**: gói tài nguyên `name.idx` + `name.idd` nằm riêng trong `from-oca\` (kèm `load-order.txt` cho CAPlay), đổi máy chủ thì thư mục được dọn.
+  Máy chủ không cài được tệp chạy nào vào máy người chơi.
 - **Dữ liệu** nằm ở `C:\ProgramData\OpenCrazyArcade` (`launcher.json`, `logs\`, `Updates\`, `WebView2\`).
 - Cần [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/); launcher tự báo nếu thiếu.
 
