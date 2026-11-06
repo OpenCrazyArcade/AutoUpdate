@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bản thử: không kèm `ddraw.dll` và `CAPlay.dll` (chỉ các tệp dựng bởi workflow).
+
 ## [1.3.7] - 2026-11-07
 ### Fixed
 - Nút "Bắt đầu" hiện "Đang Cập Nhật..." (và bị tắt) trong lúc launcher tự cài các tệp client còn thiếu lúc mở, thay vì vẫn hiện như đã sẵn sàng.
