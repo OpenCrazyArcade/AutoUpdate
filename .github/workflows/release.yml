@@ -1,14 +1,13 @@
 name: build-and-release
 
 # Version = the git tag.
-#   git tag v1.2.3 && git push origin v1.2.3   ->  builds, then publishes a GitHub Release "v1.2.3"
-# A push to main / a pull request only builds (version 0.0.0) to catch a broken build early.
-# "Run workflow" (workflow_dispatch) builds a given X.Y.Z without publishing a release.
+#   tools/release.ps1 1.2.3 && git push origin main v1.2.3   ->  builds, then publishes a GitHub Release "v1.2.3"
+# Pushing to main does nothing: build locally before pushing. A failed tag build creates no release (that step is
+# last), so delete the tag, fix, and tag again.
+# "Run workflow" (workflow_dispatch) builds a given X.Y.Z without publishing a release (artifact only).
 on:
   push:
-    branches: [main]
     tags: ['v[0-9]+.[0-9]+.[0-9]+']
-  pull_request:
   workflow_dispatch:
     inputs:
       version:
