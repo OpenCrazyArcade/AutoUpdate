@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-11-07
 ### Changed
 - `CAPlay.dll` liên kết CRT tĩnh và biên dịch MinHook cùng dự án: không còn cần cài Microsoft Visual C++ Redistributable trên máy người chơi (chỉ phụ thuộc DLL hệ thống của Windows).
 
