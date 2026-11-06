@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- `CAPlay.dll` liên kết CRT tĩnh và biên dịch MinHook cùng dự án: không còn cần cài Microsoft Visual C++ Redistributable trên máy người chơi (chỉ phụ thuộc DLL hệ thống của Windows).
+
+
 ## [1.4.2] - 2026-11-07
 ### Fixed
 - Launcher kiểm kết quả nạp `CAPlay.dll` vào game (trước đó chỉ cần tạo được luồng nạp là ghi "thành công"). Nếu `LoadLibrary` thất bại (thường do thiếu Microsoft Visual C++ Redistributable 2015-2022 x86), game không được chạy và dòng trạng thái nói rõ nguyên nhân, thay vì chạy mà không có CAPlay (không có log, không nạp gói `from-oca`).
