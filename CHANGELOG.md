@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bản thử: không kèm `CAPlay.dll`.
+
 ## [1.3.2] - 2026-11-07
 - Bản thử: `ddraw.dll` trở lại.
 
