@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Replaces hackshield\EhSvc.dll. CA.exe loads it, resolves ONE export by ordinal 10 and calls it; see
+	     Exports.cs. Native AOT, x86, no .NET runtime needed on the player's machine. -->
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>disable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<Platforms>x86</Platforms>
+		<PlatformTarget>x86</PlatformTarget>
+		<RuntimeIdentifier>win-x86</RuntimeIdentifier>
+		<PublishAot>true</PublishAot>
+		<NativeLib>Shared</NativeLib>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<StripSymbols>true</StripSymbols>
+		<AssemblyName>EhSvc</AssemblyName>
+		<RootNamespace>OpenCrazyArcade.ClientStubs</RootNamespace>
+		<Product>OpenCrazyArcade EhSvc</Product>
+		<Company>OpenCrazyArcade</Company>
+		<Description>OpenCrazyArcade stand-in for the HackShield EhSvc.dll</Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Without this the export is named "10" but gets ordinal 1; CA.exe looks for ordinal 10 (see ehsvc.def). -->
+		<LinkerArg Include="/DEF:$(MSBuildProjectDirectory)\ehsvc.def" />
+	</ItemGroup>
+
+</Project>

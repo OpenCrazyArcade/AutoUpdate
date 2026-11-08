@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!-- Replaces hackshield\HSUpdate.exe (and the copy at hackshield\Update\autoup.exe). CA.exe starts it as a child
+	     process, waits for it and wants exit code 0 and the named event set. Native AOT, x86. The published exe is then
+	     run through CheckmateCaChildPe, because CA.exe inspects its PE image (see BuildUtils). -->
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0</TargetFramework>
+		<Nullable>disable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<Platforms>x86</Platforms>
+		<PlatformTarget>x86</PlatformTarget>
+		<RuntimeIdentifier>win-x86</RuntimeIdentifier>
+		<PublishAot>true</PublishAot>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<UseSystemResourceKeys>true</UseSystemResourceKeys>
+		<IlcOptimizationPreference>Size</IlcOptimizationPreference>
+		<StripSymbols>true</StripSymbols>
+		<AssemblyName>HSUpdate</AssemblyName>
+		<RootNamespace>OpenCrazyArcade.ClientStubs</RootNamespace>
+		<Product>OpenCrazyArcade HSUpdate</Product>
+		<Company>OpenCrazyArcade</Company>
+		<Description>OpenCrazyArcade stand-in for the HackShield updater</Description>
+	</PropertyGroup>
+
+	<!-- After the Native AOT exe has been copied to the publish directory: make its image pass CA.exe's checks and verify
+	     it. The tool exits non-zero when something is still wrong, which fails the build. It has to run after
+	     CopyNativeBinary (the ILCompiler's own AfterTargets="Publish" step), which would otherwise copy the unfixed exe
+	     over the fixed one. -->
+	<Target Name="CheckmateCaChildPe" AfterTargets="CopyNativeBinary" Condition="'$(PublishAot)' == 'true'">
+		<Exec Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)..\..\BuildUtils\CheckmateCaChildPe\CheckmateCaChildPe.csproj&quot; -c Release -- &quot;$(PublishDir)$(AssemblyName).exe&quot;" />
+	</Target>
+
+</Project>

@@ -1,0 +1,167 @@
+name: build-and-release
+
+# Version = the git tag.
+#   tools/release.ps1 1.2.3 && git push origin master v1.2.3   ->  builds, then publishes a GitHub Release "v1.2.3"
+# Pushing to master does nothing: build locally before pushing. A failed tag build creates no release (that step is
+# last), so delete the tag, fix, and tag again.
+# "Run workflow" (workflow_dispatch) builds a given X.Y.Z without publishing a release (artifact only).
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, X.Y.Z (no release is created)'
+        required: true
+
+permissions:
+  contents: write   # create the release and upload its files
+
+# A newer push to the same branch makes the older build pointless; a tag build is never cancelled.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The SDK comes from global.json (10.0.x), the same one used on the developer machine.
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Work out the version
+        id: ver
+        shell: pwsh
+        run: |
+          if ('${{ github.ref_type }}' -eq 'tag') { $v = '${{ github.ref_name }}'.TrimStart('v') }
+          elseif ('${{ inputs.version }}' -ne '') { $v = '${{ inputs.version }}' }
+          else { $v = '0.0.0' }
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Not a X.Y.Z version: '$v'" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "Building version $v"
+
+      # Native AOT (nmco3.dll) is linked by the MSVC tools, which the build finds through vswhere.
+      # The runner has it already; this only makes sure it is on PATH.
+      - name: vswhere on PATH
+        shell: pwsh
+        run: |
+          "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer" >> $env:GITHUB_PATH
+          Get-Command vswhere -ErrorAction SilentlyContinue | Select-Object Source
+
+      - name: Publish autoupdate.exe
+        run: dotnet publish AutoUpdate/AutoUpdate.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/autoupdate
+
+      - name: Publish nmco3.dll
+        run: dotnet publish NMCO3/NMCO3.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/nmco3
+
+      # The HackShield stand-ins. HSUpdate runs CheckmateCaChildPe after publish and fails the build if CA.exe's checks
+      # on the updater image would still fail.
+      - name: Test the PE tool
+        run: dotnet test BuildUtils/CheckmateCaChildPe.Tests -c Release
+
+      - name: Publish ehsvc.dll
+        run: dotnet publish ClientStubs/EhSvc/EhSvc.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/ehsvc
+
+      - name: Publish hsupdate.exe
+        run: dotnet publish ClientStubs/HSUpdate/HSUpdate.csproj -c Release -p:Platform=x86 -p:Version=${{ steps.ver.outputs.version }} -o out/hsupdate
+
+      - name: Collect the files and check the version
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item out/autoupdate/autoupdate.exe dist/AutoUpdate.exe
+          Copy-Item out/nmco3/nmco3.dll dist/nmco3.dll
+          Copy-Item out/ehsvc/EhSvc.dll dist/ehsvc.dll
+          Copy-Item out/hsupdate/HSUpdate.exe dist/hsupdate.exe
+          # committed binaries, shipped as they are (prebuilt/README.md)
+          Copy-Item prebuilt/*.dll dist/
+
+          # CA.exe finds ehsvc.dll's one function by ORDINAL 10 (sub_AAB978 walks the name table comparing
+          # ordinal = index + Base): so Base must be 10 with exactly one named export. See ClientStubs/EhSvc/ehsvc.def.
+          $b = [IO.File]::ReadAllBytes("$PWD/dist/ehsvc.dll")
+          $nt = [BitConverter]::ToInt32($b, 0x3C); $opt = $nt + 24
+          $secs = [BitConverter]::ToUInt16($b, $nt + 6); $tbl = $opt + [BitConverter]::ToUInt16($b, $nt + 20)
+          $expRva = [BitConverter]::ToUInt32($b, $opt + 96)
+          $exp = -1
+          for ($i = 0; $i -lt $secs; $i++) {
+            $a = $tbl + 40 * $i
+            $va = [BitConverter]::ToUInt32($b, $a + 12); $vs = [BitConverter]::ToUInt32($b, $a + 8); $raw = [BitConverter]::ToUInt32($b, $a + 20)
+            if ($expRva -ge $va -and $expRva -lt $va + $vs) { $exp = $expRva - $va + $raw }
+          }
+          if ($exp -lt 0) { throw 'ehsvc.dll has no export table' }
+          $base = [BitConverter]::ToUInt32($b, $exp + 16); $names = [BitConverter]::ToUInt32($b, $exp + 24)
+          if ($base -ne 10 -or $names -ne 1) { throw "ehsvc.dll export table: Base=$base, names=$names (want Base 10, 1 name)" }
+
+          # hsupdate.exe: re-check the image CA.exe inspects (the build step already did; this guards the copy)
+          dotnet run --project BuildUtils/CheckmateCaChildPe -c Release -- --check dist/hsupdate.exe
+          if ($LASTEXITCODE -ne 0) { throw 'hsupdate.exe would be rejected by CA.exe' }
+
+          # The launcher compares this number with the release tag: it must be the tag.
+          $want = '${{ steps.ver.outputs.version }}.0'
+          $got = (Get-Item dist/AutoUpdate.exe).VersionInfo.FileVersion
+          if ($got -ne $want) { throw "AutoUpdate.exe has version $got, expected $want" }
+
+          # The launcher installs nmco3.dll from the project page and tells it from Nexon's original by this
+          # version resource (Nmco3File.IsOurs): a build without it would be refused on every machine.
+          $dll = (Get-Item dist/nmco3.dll).VersionInfo
+          if ($dll.FileVersion -ne $want) { throw "nmco3.dll has version $($dll.FileVersion), expected $want" }
+          if (-not "$($dll.ProductName)".StartsWith('OpenCrazyArcade')) { throw "nmco3.dll ProductName is '$($dll.ProductName)'" }
+
+          # attachments.json: what this release is made of. The project page reads it (it is also embedded in the
+          # release notes, because a browser cannot download release assets cross-origin) to offer only what the launcher
+          # knows how to install; the launcher keeps its own table of where each name goes (ClientComponents).
+          $attachments = [ordered]@{
+            schema = 1
+            release = '${{ steps.ver.outputs.version }}'
+            minLauncher = '${{ steps.ver.outputs.version }}'
+            files = @(Get-ChildItem dist | Sort-Object Name | ForEach-Object {
+              [ordered]@{ name = $_.Name; size = $_.Length; sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() }
+            })
+          }
+          $attachments | ConvertTo-Json -Depth 5 | Set-Content dist/attachments.json -Encoding utf8
+          Get-Content dist/attachments.json
+
+          # build the list first: SHA256SUMS.txt must not hash itself
+          $sums = Get-ChildItem dist | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name }
+          $sums | Set-Content dist/SHA256SUMS.txt
+          Get-Content dist/SHA256SUMS.txt
+
+      # The release text is the "## [X.Y.Z]" section of CHANGELOG.md (tools/release.ps1 writes it), plus the hashes.
+      # No such section, or an empty one: fail rather than publish a release with no description.
+      - name: Release notes from CHANGELOG.md
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        run: |
+          $ver = '${{ steps.ver.outputs.version }}'
+          $text = Get-Content CHANGELOG.md -Raw
+          $m = [regex]::Match($text, '(?ms)^## \[' + [regex]::Escape($ver) + '\][^\r\n]*\r?\n(?<body>.*?)(?=^## \[|\z)')
+          if (-not $m.Success -or [string]::IsNullOrWhiteSpace($m.Groups['body'].Value)) {
+            throw "CHANGELOG.md has no (or an empty) '## [$ver]' section. Run tools/release.ps1 $ver before tagging."
+          }
+          $sums = Get-Content dist/SHA256SUMS.txt -Raw
+          $attachments = (Get-Content dist/attachments.json -Raw | ConvertFrom-Json | ConvertTo-Json -Depth 5 -Compress)
+          $notes = $m.Groups['body'].Value.Trim() + "`n`n---`n**SHA-256**`n`n" + '```' + "`n" + $sums.Trim() + "`n" + '```' + "`n`n" + "<!-- attachments: $attachments -->`n"
+          Set-Content release-notes.md $notes -Encoding utf8
+          Get-Content release-notes.md
+
+      # Only worth storing when it is not a plain push/PR check (those only prove that the build works).
+      - uses: actions/upload-artifact@v4
+        if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+        with:
+          name: autoupdate-${{ steps.ver.outputs.version }}
+          path: dist/*
+          retention-days: 14
+
+      - name: Create the GitHub Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = Get-ChildItem dist -File | ForEach-Object { $_.FullName }   # everything collected above, whatever prebuilt/ held
+          gh release create '${{ github.ref_name }}' $assets `
+            --title 'AutoUpdate ${{ github.ref_name }}' --notes-file release-notes.md
