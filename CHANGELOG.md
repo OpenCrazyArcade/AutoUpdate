@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-13
 ### Fixed
 - `CmdLine.txt` không còn giữ `loginip`/`loginport` của máy chủ cũ sau khi đổi cấu hình: launcher dựng lại kết nối SignalR khi địa chỉ máy chủ đã khác.
 
