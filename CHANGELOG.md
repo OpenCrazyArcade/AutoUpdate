@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- `CmdLine.txt` không còn giữ `loginip`/`loginport` của máy chủ cũ sau khi đổi cấu hình: launcher dựng lại kết nối SignalR khi địa chỉ máy chủ đã khác.
+
 ## [1.0.0] - 2026-11-08
 ### Added
 - Launcher `AutoUpdate.exe` cho Boom Online (Crazy Arcade) bản VN v116: đặt cạnh `ca.exe`, chọn máy chủ, cập nhật game, chạy game và giữ cầu nối NMCO. Chạy một bản duy nhất (mutex); chạy lần hai chỉ chuyển lệnh sang bản đang chạy.

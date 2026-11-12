@@ -17,6 +17,7 @@ internal partial class NMCoreManager
     private readonly ILogger<NMCoreManager> _logger;
     private readonly LauncherConfig _config;
     private HubConnection _hubConnection;
+    private string _hubUrl;   // URL the current _hubConnection was built for
     private readonly SemaphoreSlim _connectLock = new(1, 1);
 
     public NMCoreManager(ILogger<NMCoreManager> logger, LauncherConfig config)
@@ -149,15 +150,28 @@ internal partial class NMCoreManager
         await _connectLock.WaitAsync();
         try
         {
+            string baseUrl = _config.GetNormalizedServerUrl();
+            string hubUrl = string.IsNullOrEmpty(baseUrl) ? null : $"{baseUrl}/hubs/community";
+
+            // The configured server changed since this hub was built (config saved from the settings page):
+            // drop it, or GetServerConfig keeps answering with the previous server's login address.
+            if (_hubConnection != null && _hubUrl != hubUrl)
+            {
+                var stale = _hubConnection;
+                _hubConnection = null;
+                CurrentPresence = null;
+                try { await stale.StopAsync(); await stale.DisposeAsync(); }
+                catch (Exception ex) { _logger.LogDebug("Dong ket noi hub cu that bai: {Message}", ex.Message); }
+            }
+
             if (_hubConnection != null && _hubConnection.State == HubConnectionState.Connected)
                 return;
 
-            string baseUrl = _config.GetNormalizedServerUrl();
-            if (string.IsNullOrEmpty(baseUrl)) return;   // no server configured: nothing to connect to
-            string hubUrl = $"{baseUrl}/hubs/community";
+            if (hubUrl == null) return;   // no server configured: nothing to connect to
 
             if (_hubConnection == null)
             {
+                _hubUrl = hubUrl;
                 _hubConnection = new HubConnectionBuilder()
                     .WithUrl(hubUrl)
                     .WithAutomaticReconnect()
