@@ -58,6 +58,9 @@ partial class Program
 {
     public static WebApplication HostApp { get; private set; }
 
+    /// <summary>--silent: update everything from the server, start the game by itself and leave when the game does (for scripted runs / tests).</summary>
+    public static bool Silent { get; private set; }
+
     // One log file per run would otherwise pile up for ever.
     static void PruneOldLauncherLogs(string dir, int keep)
     {
@@ -80,6 +83,7 @@ partial class Program
     static void Main(string[] args)
     {
         bool afterUpdate = args.Contains("--after-update");
+        Silent = args.Contains("--silent");
         string link = args.FirstOrDefault(ProtocolHandler.IsLink);
 
         // One launcher at a time. A launcher started by an update waits for its predecessor to leave.

@@ -105,6 +105,8 @@ internal partial class LauncherWindow : Window
 
         InitializeComponent();
 
+        if (Program.Silent) { WindowState = WindowState.Minimized; ShowInTaskbar = false; }   // --silent: no window to look at
+
         _nmCoreManager.PresenceChanged += OnPresenceChanged;
         Loaded += LauncherWindow_Loaded;
     }
@@ -150,6 +152,22 @@ internal partial class LauncherWindow : Window
         }
 
         StartUpdateWatching();
+
+        if (Program.Silent) await RunSilentAsync();
+    }
+
+    /// <summary>--silent: the start button's whole path (it updates first when the server's version differs, then starts the game);
+    /// when no game came out of it there is nothing to wait for, so the launcher leaves too.</summary>
+    private async Task RunSilentAsync()
+    {
+        _logger.LogInformation("[SILENT] cap nhat + tu khoi dong game");
+        while (IsUpdatingFiles) await Task.Delay(300);
+        await StartGameAsync();
+        if (_gameProcess == null && !IsGameRunning())
+        {
+            _logger.LogWarning("[SILENT] khong khoi dong duoc game: thoat launcher");
+            Application.Current.Shutdown(1);
+        }
     }
 
     // ── Tep client theo dung ban cua launcher ─────────────────────────────────────────────────────
@@ -1211,7 +1229,9 @@ savesettings=1
         if (answer == MessageBoxResult.Yes) OpenInDefaultBrowser(GuideUrl);
     }
 
-    private async void BtnStart_Click(object sender, RoutedEventArgs e)
+    private async void BtnStart_Click(object sender, RoutedEventArgs e) => await StartGameAsync();
+
+    private async Task StartGameAsync()
     {
         if (_componentSyncRunning || _pageInstallRunning) { TxtStatus.Text = "Đang cập nhật tệp, hãy đợi một chút."; return; }
         if (IsGameRunning())
@@ -1461,6 +1481,8 @@ savesettings=1
             BtnStart.Style = (Style)Resources["NostalgicOrangeButton"];
             TxtStatus.Text = "Sẵn sàng tham gia OpenCrazyArcade!";
             if (_updatePending) _ = RunUpdateIfIdleAsync();
+
+            if (Program.Silent) { _logger.LogInformation("[SILENT] game da thoat: thoat launcher"); Application.Current.Shutdown(); return; }
 
             // Restore launcher window when game exits
             WindowState = WindowState.Normal;

@@ -141,7 +141,7 @@ internal sealed class SelfUpdater(ILogger<SelfUpdater> logger)
             }
 
             // Start the new one; it waits for us to let go of the mutex.
-            Process.Start(new ProcessStartInfo(exe, "--after-update") { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe)! });
+            Process.Start(new ProcessStartInfo(exe, Program.Silent ? "--after-update --silent" : "--after-update") { UseShellExecute = false, WorkingDirectory = Path.GetDirectoryName(exe)! });
             logger.LogInformation("[SELFUPDATE] da thay {Cur} bang ban moi, khoi dong ban moi", CurrentVersionText);
             return true;
         }

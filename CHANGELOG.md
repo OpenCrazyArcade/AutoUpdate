@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+### Added
+- Cờ `--silent`: launcher thu nhỏ vào nền, cập nhật tệp client và gói tài nguyên `from-oca` như khi bấm "Bắt đầu", tự mở game, rồi tự thoát khi game thoát (hoặc khi không mở được game). Dùng cho chạy kịch bản và kiểm thử.
 
 ## [1.0.1] - 2026-11-13
 ### Fixed
